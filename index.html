@@ -333,7 +333,6 @@
     function buildPositions(students, edges, degreeCounts) {
       if (!students.length) return {};
 
-      // 初始無連結：分散式排法 + 邊界限制
       if (!edges.length) {
         const positions = {};
         const count = students.length;
@@ -367,7 +366,6 @@
         return positions;
       }
 
-      // 有連結後：多中心群聚布局 + 邊界限制
       const adjacency = {};
       students.forEach((s) => { adjacency[s.id] = new Set(); });
 
@@ -432,6 +430,20 @@
       return positions;
     }
 
+    async function deleteAllResponses() {
+      const snapshot = await db
+        .collection("classes")
+        .doc(CLASS_ID)
+        .collection("responses")
+        .get();
+
+      if (snapshot.empty) return;
+
+      const batch = db.batch();
+      snapshot.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+
     function Card({ children, className = "" }) {
       return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
     }
@@ -444,12 +456,18 @@
       );
     }
 
-    function Button({ children, onClick, active = false, className = "", disabled = false }) {
+    function Button({ children, onClick, active = false, className = "", disabled = false, danger = false }) {
       return (
         <button
           onClick={onClick}
           disabled={disabled}
-          className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${disabled ? "cursor-not-allowed opacity-50" : ""} ${className}`}
+          className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
+            danger
+              ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+              : active
+                ? "bg-slate-900 text-white"
+                : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
+          } ${disabled ? "cursor-not-allowed opacity-50" : ""} ${className}`}
         >
           {children}
         </button>
@@ -615,6 +633,7 @@
       const [step, setStep] = useState(999);
       const [submitMessage, setSubmitMessage] = useState("");
       const [manualPositions, setManualPositions] = useState({});
+      const [isBusy, setIsBusy] = useState(false);
 
       useEffect(() => {
         const unsub = db.collection("classes").doc(CLASS_ID).onSnapshot((doc) => {
@@ -703,20 +722,58 @@
           return;
         }
 
-        await db.collection("classes").doc(CLASS_ID).set({
-          rosterText,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        const ok = confirm("重建班級名單後，會清空目前所有已送出的連結資料。要繼續嗎？");
+        if (!ok) return;
 
-        setStudents(parsed);
-        setSubmissions({});
-        setManualPositions({});
-        setSelectedStudentId(String(parsed[0].id));
-        setViewStudentId(parsed[0].id);
-        setStartId(parsed[0].id);
-        setStrongSelections([]);
-        setWeakSelections([]);
-        setStep(999);
+        try {
+          setIsBusy(true);
+
+          await db.collection("classes").doc(CLASS_ID).set({
+            rosterText,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          await deleteAllResponses();
+
+          setStudents(parsed);
+          setSubmissions({});
+          setManualPositions({});
+          setSelectedStudentId(String(parsed[0].id));
+          setViewStudentId(parsed[0].id);
+          setStartId(parsed[0].id);
+          setStrongSelections([]);
+          setWeakSelections([]);
+          setStep(999);
+          setSubmitMessage("已重建名單並清空所有連結資料");
+          setTimeout(() => setSubmitMessage(""), 2500);
+        } catch (error) {
+          console.error(error);
+          alert("重建失敗，請稍後再試");
+        } finally {
+          setIsBusy(false);
+        }
+      }
+
+      async function clearAllNetworkData() {
+        const ok = confirm("這會清空所有學生已送出的強連結與弱連結資料，而且重新整理後也不會再出現。要繼續嗎？");
+        if (!ok) return;
+
+        try {
+          setIsBusy(true);
+          await deleteAllResponses();
+          setSubmissions({});
+          setManualPositions({});
+          setStrongSelections([]);
+          setWeakSelections([]);
+          setStep(999);
+          setSubmitMessage("已清空全部連結資料");
+          setTimeout(() => setSubmitMessage(""), 2500);
+        } catch (error) {
+          console.error(error);
+          alert("清空失敗，請稍後再試");
+        } finally {
+          setIsBusy(false);
+        }
       }
 
       function toggleStrong(id) {
@@ -804,14 +861,18 @@
                       <Button active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</Button>
                       <Button active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</Button>
                       <Button onClick={resetLayout}>重設節點位置</Button>
+                      <Button danger={true} onClick={clearAllNetworkData} disabled={isBusy}>清空全部連結資料</Button>
                     </div>
                   </div>
                 </div>
+
                 <div className="px-6 pb-2">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    可直接用滑鼠拖曳節點，自由調整網絡圖位置；若想恢復自動排列，按「重設節點位置」。
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 leading-7">
+                    這個版本的連結資料會存到 Firebase，所以重新整理頁面時，舊資料會被重新讀回來。若要真正重置，請按右上的「清空全部連結資料」。
+                    節點可直接用滑鼠拖曳；若想恢復自動排列，按「重設節點位置」。
                   </div>
                 </div>
+
                 <div className="p-6 pt-4">
                   <NetworkGraph
                     students={students}
@@ -829,6 +890,29 @@
               </Card>
 
               <div className="grid gap-6">
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xl font-semibold text-slate-900">班級名單設定</div>
+                      <Button onClick={rebuildClass} disabled={isBusy}>重建班級名單</Button>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-2 text-sm text-slate-500">學生名單（每行一位）</div>
+                      <textarea
+                        value={rosterText}
+                        onChange={(e) => setRosterText(e.target.value)}
+                        rows="10"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                      />
+                    </div>
+
+                    <div className="mt-3 text-sm text-slate-500">
+                      重新建立名單時，會同步清除所有已送出的網絡連結資料。
+                    </div>
+                  </div>
+                </Card>
+
                 <Card>
                   <div className="p-6">
                     <div className="text-xl font-semibold text-slate-900">學生填答區</div>
@@ -866,7 +950,7 @@
                         </div>
                       </div>
 
-                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出目前選擇</Button>
+                      <Button className="w-full" active={true} onClick={submitOwnNetwork} disabled={isBusy}>送出目前選擇</Button>
 
                       {submitMessage && (
                         <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -973,7 +1057,7 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
