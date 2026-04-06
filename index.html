@@ -1,0 +1,621 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, getDocs, writeBatch } from 'firebase/firestore';
+
+// ============================================================================
+// Firebase Initialization
+// ============================================================================
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'social-network-demo';
+
+// 預設全班名單 (已去重複並清理格式)
+const DEFAULT_CLASS_LIST = [
+  "詹雁婷", "黃家柔", "姚宇倢", "王瑜凡", "謝絲語", "劉亭瑜", "簡佑軒", "李章鴻", "黃涵溱", "蘇琇萍", 
+  "謝函妤", "葉珈伶", "鄭皓勻", "林芸葶", "黃思媛", "粘凱柔", "張詠淇", "張恩臨", "陳馨美", "王晨庭", 
+  "陳楷鈞", "郭品涵", "鍾宥嫀", "施沛宇", "王廷睿", "陳思嫺", "徐靖晴", "陳筠蓁", "鍾秉諺", "林敬倫", 
+  "陳思澔", "徐翊薰", "林采萱", "岑子薰", "黎佩彤", "熊苡寧", "羅宇宣", "黃千芳", "吳宜錚", "陳玟媛", 
+  "蔡淳璿", "莊晴閔", "林依璇", "鄧芷安", "鄧修源", "林宸安", "向文軒", "邱顗帆", "張馨慈", "林佳穎", 
+  "李杰紘", "趙芷宜", "陳齊寧", "梅若婕", "劉禹彤", "劉郁鈺", "何欣嬡", "陳照恩", "許芙瑄", "鄭恩伃", 
+  "房怡杉", "范瑞麟", "卓聿澤", "顏祥恩", "朱紘緯", "王瑜偵", "李書緯", "陳姮伃", "凌婧綸", "黃芝茜", 
+  "劉思晴", "白宸瑜", "鄭孚玉", "朱翊安", "趙佑昕"
+];
+
+// ============================================================================
+// Main Application Component
+// ============================================================================
+export default function App() {
+  // --- Global States ---
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [view, setView] = useState('student'); // 'teacher', 'student', 'graph'
+  const [message, setMessage] = useState(null);
+
+  // --- Data States ---
+  const [classList, setClassList] = useState(DEFAULT_CLASS_LIST);
+  const [connections, setConnections] = useState({}); 
+
+  // --- UI Form States (提升至最上層，避免元件重繪時遺失) ---
+  const [teacherInput, setTeacherInput] = useState(DEFAULT_CLASS_LIST.join(', '));
+  const [me, setMe] = useState('');
+  const [s1, setS1] = useState('');
+  const [s2, setS2] = useState('');
+  const [w1, setW1] = useState('');
+
+  // --- Simulation States ---
+  const [simulationActive, setSimulationActive] = useState(false);
+  const [infectedNodes, setInfectedNodes] = useState({}); 
+  const [currentStep, setCurrentStep] = useState(0);
+  const [startNode, setStartNode] = useState('');
+
+  // --- Physics Refs ---
+  const canvasRef = useRef(null);
+  const physicsRef = useRef({ nodes: [], edges: [], animationFrameId: null });
+
+  // ============================================================================
+  // 1. Authentication
+  // ============================================================================
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+        showMessage("認證失敗，請重新整理網頁", "error");
+      }
+    };
+    initAuth();
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthChecking(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ============================================================================
+  // 2. Data Fetching
+  // ============================================================================
+  useEffect(() => {
+    if (!user) return;
+
+    const classDataRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'classList');
+    const connectionsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'connections');
+
+    const unsubClass = onSnapshot(classDataRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const list = docSnap.data().students || DEFAULT_CLASS_LIST;
+        setClassList(list);
+        setTeacherInput(list.join(', ')); // 保持老師輸入框與雲端同步
+      }
+    }, (error) => console.error(error));
+
+    const unsubConns = onSnapshot(connectionsCollectionRef, (snapshot) => {
+      const newConns = {};
+      snapshot.forEach(doc => {
+        newConns[doc.id] = doc.data();
+      });
+      setConnections(newConns);
+    }, (error) => console.error(error));
+
+    return () => {
+      unsubClass();
+      unsubConns();
+    };
+  }, [user]);
+
+  // ============================================================================
+  // Physics Engine & Graph Rendering (D3-like Force Directed Graph)
+  // ============================================================================
+  useEffect(() => {
+    if (view !== 'graph' || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    let { nodes, edges } = physicsRef.current;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // 1. Sync React Data to Physics Engine Data
+    classList.forEach(name => {
+      if (!nodes.find(n => n.id === name)) {
+        nodes.push({
+          id: name,
+          x: Math.random() * (width - 100) + 50,
+          y: Math.random() * (height - 100) + 50,
+          vx: 0, vy: 0
+        });
+      }
+    });
+    
+    nodes = nodes.filter(n => classList.includes(n.id));
+
+    edges = [];
+    Object.keys(connections).forEach(source => {
+      const data = connections[source];
+      (data.strong || []).forEach(target => {
+        if (classList.includes(target)) edges.push({ source, target, type: 'strong' });
+      });
+      (data.weak || []).forEach(target => {
+        if (classList.includes(target)) edges.push({ source, target, type: 'weak' });
+      });
+    });
+
+    physicsRef.current = { nodes, edges };
+
+    // 2. Physics Loop
+    const draw = () => {
+      const k = 0.05; 
+      const repulsion = 1500; 
+      const damping = 0.6; 
+
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          let dx = nodes[i].x - nodes[j].x;
+          let dy = nodes[i].y - nodes[j].y;
+          
+          if (dx === 0 && dy === 0) {
+            dx = (Math.random() - 0.5) * 2;
+            dy = (Math.random() - 0.5) * 2;
+          }
+
+          let distSq = dx * dx + dy * dy;
+          if (distSq < 1) distSq = 1;
+          
+          let dist = Math.sqrt(distSq);
+          
+          if (dist < 150) { 
+            let force = Math.min(repulsion / distSq, 30); 
+            let fx = (dx / dist) * force;
+            let fy = (dy / dist) * force;
+            nodes[i].vx += fx; nodes[i].vy += fy;
+            nodes[j].vx -= fx; nodes[j].vy -= fy;
+          }
+        }
+      }
+
+      edges.forEach(edge => {
+        let source = nodes.find(n => n.id === edge.source);
+        let target = nodes.find(n => n.id === edge.target);
+        if (source && target) {
+          let dx = target.x - source.x;
+          let dy = target.y - source.y;
+          let distSq = dx * dx + dy * dy;
+          let dist = Math.sqrt(distSq) || 1;
+          
+          let targetDist = edge.type === 'strong' ? 70 : 130; 
+          let force = (dist - targetDist) * k;
+          
+          force = Math.max(-10, Math.min(10, force)); 
+          
+          let fx = (dx / dist) * force;
+          let fy = (dy / dist) * force;
+          source.vx += fx; source.vy += fy;
+          target.vx -= fx; target.vy -= fy;
+        }
+      });
+
+      nodes.forEach(n => {
+        n.vx += (width / 2 - n.x) * 0.01;
+        n.vy += (height / 2 - n.y) * 0.01;
+        n.vx *= damping;
+        n.vy *= damping;
+        n.x += n.vx;
+        n.y += n.vy;
+
+        if (isNaN(n.x) || !isFinite(n.x)) { n.x = width / 2; n.vx = 0; }
+        if (isNaN(n.y) || !isFinite(n.y)) { n.y = height / 2; n.vy = 0; }
+
+        if (n.x < 30) { n.x = 30; n.vx *= -0.5; }
+        if (n.x > width - 30) { n.x = width - 30; n.vx *= -0.5; }
+        if (n.y < 30) { n.y = 30; n.vy *= -0.5; }
+        if (n.y > height - 30) { n.y = height - 30; n.vy *= -0.5; }
+      });
+
+      ctx.clearRect(0, 0, width, height);
+
+      edges.forEach(edge => {
+        let source = nodes.find(n => n.id === edge.source);
+        let target = nodes.find(n => n.id === edge.target);
+        if (source && target) {
+          ctx.beginPath();
+          ctx.moveTo(source.x, source.y);
+          ctx.lineTo(target.x, target.y);
+          if (edge.type === 'strong') {
+            ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([]);
+          } else {
+            ctx.strokeStyle = 'rgba(249, 115, 22, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]);
+          }
+          ctx.stroke();
+        }
+      });
+      ctx.setLineDash([]);
+
+      nodes.forEach(n => {
+        const isInfected = n.id in infectedNodes;
+        const infectionStep = infectedNodes[n.id];
+        
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 11, 0, 2 * Math.PI); 
+        
+        if (isInfected) {
+           if (infectionStep === 0) ctx.fillStyle = '#991b1b';
+           else if (infectionStep === 1) ctx.fillStyle = '#ef4444';
+           else if (infectionStep === 2) ctx.fillStyle = '#f97316';
+           else ctx.fillStyle = '#eab308';
+        } else {
+          ctx.fillStyle = '#e5e7eb';
+        }
+        
+        ctx.fill();
+        ctx.strokeStyle = '#9ca3af';
+        ctx.lineWidth = 1.5; 
+        ctx.stroke();
+
+        ctx.fillStyle = isInfected ? '#ffffff' : '#374151';
+        ctx.font = "bold 10px sans-serif"; 
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(n.id ? n.id.substring(0, 3) : '', n.x, n.y); 
+      });
+
+      physicsRef.current.animationFrameId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(physicsRef.current.animationFrameId);
+    };
+  }, [view, classList, connections, infectedNodes]);
+
+  // ============================================================================
+  // Action Handlers
+  // ============================================================================
+  const showMessage = (text, type = 'success') => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const handleUpdateClassList = async () => {
+    if (!user) return;
+    const names = teacherInput.split(/[\n,]+/).map(n => n.trim()).filter(n => n);
+    const uniqueNames = [...new Set(names)];
+    
+    if (uniqueNames.length === 0) {
+      showMessage("請輸入至少一位學生姓名", "error");
+      return;
+    }
+
+    try {
+      const classDataRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'classList');
+      await setDoc(classDataRef, { students: uniqueNames });
+      showMessage("名單已更新！請學生開始連線填寫。");
+    } catch (err) {
+      console.error(err);
+      showMessage("更新失敗", "error");
+    }
+  };
+
+  const handleClearConnections = async () => {
+    if(!user) return;
+    try {
+      const connectionsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'connections');
+      const snapshot = await getDocs(connectionsCollectionRef);
+      const batch = writeBatch(db);
+      snapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      showMessage("所有連線資料已清空");
+    } catch(err) {
+      console.error(err);
+      showMessage("清空失敗", "error");
+    }
+  };
+
+  const handleStudentSubmit = async () => {
+    if (!user) return;
+    if (!me) {
+      showMessage("請選擇你是誰！", "error");
+      return;
+    }
+    
+    const strongTies = [...new Set([s1, s2].filter(n => n && n !== me))];
+    const weakTies = [...new Set([w1].filter(n => n && n !== me && !strongTies.includes(n)))];
+
+    try {
+      const myConnRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', me);
+      await setDoc(myConnRef, { strong: strongTies, weak: weakTies, timestamp: new Date().toISOString() });
+      showMessage(`提交成功！你已在網路上建立連結。`);
+    } catch (err) {
+      console.error(err);
+      showMessage("提交失敗", "error");
+    }
+  };
+
+  // --- Simulation Logic ---
+  const startSimulation = () => {
+    if (!startNode) {
+      showMessage("請先選擇起點同學", "error");
+      return;
+    }
+    setSimulationActive(true);
+    setCurrentStep(0);
+    setInfectedNodes({ [startNode]: 0 });
+  };
+
+  const nextSimulationStep = () => {
+    const nextStepNum = currentStep + 1;
+    const newlyInfected = { ...infectedNodes };
+    let anyNew = false;
+
+    const adjacency = {};
+    classList.forEach(n => adjacency[n] = []);
+    
+    Object.keys(connections).forEach(source => {
+      const data = connections[source];
+      const allTargets = [...(data.strong || []), ...(data.weak || [])];
+      allTargets.forEach(target => {
+        if (adjacency[source] && !adjacency[source].includes(target)) adjacency[source].push(target);
+        if (adjacency[target] && !adjacency[target].includes(source)) adjacency[target].push(source);
+      });
+    });
+
+    Object.keys(infectedNodes).forEach(node => {
+      const neighbors = adjacency[node] || [];
+      neighbors.forEach(neighbor => {
+        if (!(neighbor in newlyInfected)) {
+          newlyInfected[neighbor] = nextStepNum;
+          anyNew = true;
+        }
+      });
+    });
+
+    if (anyNew) {
+      setInfectedNodes(newlyInfected);
+      setCurrentStep(nextStepNum);
+    } else {
+      showMessage("訊息已無法繼續擴散（達到網絡邊界）");
+    }
+  };
+
+  const resetSimulation = () => {
+    setSimulationActive(false);
+    setInfectedNodes({});
+    setCurrentStep(0);
+  };
+
+  // ============================================================================
+  // UI Render Helpers (重構為純函數，避免 Canvas 被強迫註銷)
+  // ============================================================================
+  
+  const renderTeacherView = () => (
+    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">👨‍🏫 老師控制台</h2>
+      <p className="text-gray-600 mb-4">
+        請在此貼上全班名單（以逗號或換行分隔）。設定完成後，請學生切換至「學生輸入區」尋找自己的名字。
+      </p>
+      <textarea
+        className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none resize-none mb-4"
+        placeholder="例如：王小明, 陳大牛, 林阿華..."
+        value={teacherInput}
+        onChange={(e) => setTeacherInput(e.target.value)}
+      />
+      <div className="flex gap-4">
+        <button 
+          onClick={handleUpdateClassList}
+          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-lg transition"
+        >
+          儲存班級名單
+        </button>
+        <button 
+          onClick={() => {
+            if(window.confirm('確定要清空學生們剛剛填寫的連線資料嗎？(名單會保留)')) {
+              handleClearConnections();
+            }
+          }}
+          className="bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-3 px-4 rounded-lg transition"
+        >
+          清空連線資料
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderStudentView = () => {
+    if (classList.length === 0) {
+      return (
+        <div className="text-center py-10">
+          <p className="text-gray-500 text-lg">老師尚未設定班級名單，請稍候...</p>
+        </div>
+      );
+    }
+    return (
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-md mx-auto">
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">🎓 建立你的社會資本</h2>
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">我是誰？ (Me)</label>
+            <select className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" 
+              value={me} onChange={e => setMe(e.target.value)}>
+              <option value="">-- 選擇你的名字 --</option>
+              {classList.map(n => <option key={`me-${n}`} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div className="pt-4 border-t border-gray-100">
+            <h3 className="font-bold text-blue-600 mb-2">🤝 強連結 (Strong Ties)</h3>
+            <p className="text-xs text-gray-500 mb-3">班上最常一起討論報告、最熟的同學（最多2位）</p>
+            <div className="space-y-3">
+              <select className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                value={s1} onChange={e => setS1(e.target.value)}>
+                <option value="">-- 強連結 1 --</option>
+                {classList.filter(n => n !== me).map(n => <option key={`s1-${n}`} value={n}>{n}</option>)}
+              </select>
+              <select className="w-full p-3 bg-blue-50 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                value={s2} onChange={e => setS2(e.target.value)}>
+                <option value="">-- 強連結 2 (選填) --</option>
+                {classList.filter(n => n !== me).map(n => <option key={`s2-${n}`} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-gray-100">
+            <h3 className="font-bold text-orange-600 mb-2">👋 弱連結 (Weak Ties)</h3>
+            <p className="text-xs text-gray-500 mb-3">除了自己朋友圈外，最近一次講過話/打過招呼的同學（1位）</p>
+            <select className="w-full p-3 bg-orange-50 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+              value={w1} onChange={e => setW1(e.target.value)}>
+              <option value="">-- 弱連結 --</option>
+              {classList.filter(n => n !== me).map(n => <option key={`w1-${n}`} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <button 
+            onClick={handleStudentSubmit}
+            className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-4 rounded-lg shadow-md transition transform hover:-translate-y-1"
+          >
+            送出我的連結網
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderGraphView = () => (
+    <div className="flex flex-col lg:flex-row gap-6 h-full">
+      <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative" style={{ minHeight: '500px' }}>
+        <div className="absolute top-4 left-4 bg-white/90 p-3 rounded shadow-sm text-sm border border-gray-200 z-10">
+          <h4 className="font-bold mb-2">圖例</h4>
+          <div className="flex items-center gap-2 mb-1"><div className="w-6 h-1 bg-blue-500"></div> 強連結</div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-6 h-0 border-t-2 border-dashed border-orange-500"></div> 弱連結</div>
+          <div className="flex items-center gap-2 mt-3"><div className="w-4 h-4 rounded-full bg-red-800"></div> 傳染起點</div>
+          <div className="flex items-center gap-2 mb-1"><div className="w-4 h-4 rounded-full bg-red-500"></div> 已感染(收到訊息)</div>
+          <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-full bg-gray-200 border border-gray-400"></div> 未感染</div>
+        </div>
+        
+        <canvas 
+          ref={canvasRef} 
+          width={800} 
+          height={600} 
+          className="w-full h-full object-contain cursor-crosshair bg-slate-50"
+          style={{ display: 'block', width: '100%', height: '100%' }}
+        />
+      </div>
+
+      <div className="w-full lg:w-80 bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col">
+        <h2 className="text-xl font-bold text-gray-800 mb-4">🦠 訊息傳染模擬器</h2>
+        <p className="text-sm text-gray-600 mb-6">
+          觀察簡單傳染（只要有連線就會擴散）如何在網絡中蔓延。找找看誰是資訊守門人（結構洞）！
+        </p>
+
+        {!simulationActive ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">選擇事件起點 (Source)</label>
+              <select 
+                className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none"
+                value={startNode} 
+                onChange={(e) => setStartNode(e.target.value)}
+              >
+                <option value="">-- 選擇第一位收到八卦的人 --</option>
+                {classList.map(n => <option key={`start-${n}`} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <button 
+              onClick={startSimulation}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition"
+            >
+              開始散播訊息
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col flex-1">
+            <div className="mb-6 p-4 bg-red-50 rounded-lg border border-red-100 text-center">
+              <div className="text-sm text-red-600 font-bold mb-1">目前階段</div>
+              <div className="text-3xl font-black text-red-700">Day {currentStep}</div>
+              <div className="text-sm text-gray-600 mt-2">
+                已感染：{Object.keys(infectedNodes).length} / {classList.length} 人
+              </div>
+            </div>
+
+            <button 
+              onClick={nextSimulationStep}
+              className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-4 rounded-lg transition mb-3"
+            >
+              推進到下一天 (Next Step)
+            </button>
+            
+            <button 
+              onClick={resetSimulation}
+              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg transition mt-auto"
+            >
+              重置模擬
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // Main Render
+  // ============================================================================
+  if (authChecking) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">載入中...</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans flex flex-col">
+      {message && (
+        <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-lg z-50 text-white font-bold transition-all
+          ${message.type === 'error' ? 'bg-red-500' : 'bg-green-500'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🕸️</span>
+            <h1 className="font-bold text-xl tracking-tight">社會網絡模擬器</h1>
+          </div>
+          <nav className="flex space-x-1 sm:space-x-2 bg-gray-100 p-1 rounded-lg">
+            <button 
+              onClick={() => setView('teacher')}
+              className={`px-3 sm:px-4 py-1.5 text-sm font-medium rounded-md transition ${view === 'teacher' ? 'bg-white shadow text-indigo-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              👨‍🏫 老師設定
+            </button>
+            <button 
+              onClick={() => setView('student')}
+              className={`px-3 sm:px-4 py-1.5 text-sm font-medium rounded-md transition ${view === 'student' ? 'bg-white shadow text-indigo-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              🎓 學生輸入
+            </button>
+            <button 
+              onClick={() => { setView('graph'); resetSimulation(); }}
+              className={`px-3 sm:px-4 py-1.5 text-sm font-medium rounded-md transition ${view === 'graph' ? 'bg-white shadow text-indigo-600' : 'text-gray-600 hover:text-gray-900'}`}
+            >
+              🌐 網絡觀測站
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6 lg:p-8">
+        {view === 'teacher' && renderTeacherView()}
+        {view === 'student' && renderStudentView()}
+        {view === 'graph' && renderGraphView()}
+      </main>
+    </div>
+  );
+}
