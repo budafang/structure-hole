@@ -11,12 +11,6 @@ import {
   Send,
   GitBranch,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 
 const rawRoster = [
   "詹雁婷", "黃家柔", "姚宇倢", "王瑜凡", "謝絲語", "劉亭瑜", "簡佑軒", "李章鴻", "黃涵溱", "蘇琇萍",
@@ -59,11 +53,15 @@ function createSeedSubmissions(list) {
       ((id + 0) % total) + 1,
       ((id + 5) % total) + 1,
       ((id + 11) % total) + 1,
-    ].filter((target, idx, arr) => target !== id && arr.indexOf(target) === idx).slice(0, 3);
+    ]
+      .filter((target, idx, arr) => target !== id && arr.indexOf(target) === idx)
+      .slice(0, 3);
     const weak = [
       ((id + 17) % total) + 1,
       ((id + 29) % total) + 1,
-    ].filter((target, idx, arr) => target !== id && !strong.includes(target) && arr.indexOf(target) === idx).slice(0, 2);
+    ]
+      .filter((target, idx, arr) => target !== id && !strong.includes(target) && arr.indexOf(target) === idx)
+      .slice(0, 2);
     result[id] = { strong, weak };
   });
   return result;
@@ -154,6 +152,69 @@ function computeBridgeScore(edges) {
   return counts;
 }
 
+function Card({ children, className = "" }) {
+  return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
+}
+
+function CardHeader({ children, className = "" }) {
+  return <div className={`p-6 pb-0 ${className}`}>{children}</div>;
+}
+
+function CardContent({ children, className = "" }) {
+  return <div className={`p-6 ${className}`}>{children}</div>;
+}
+
+function CardTitle({ children, className = "" }) {
+  return <div className={`text-xl font-semibold text-slate-900 ${className}`}>{children}</div>;
+}
+
+function Badge({ children, dark = false }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-sm ${dark ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function PrimaryButton({ children, onClick, active = false, className = "", type = "button" }) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ProgressBar({ value }) {
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
+function SelectField({ value, onChange, options, placeholder }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 focus:border-slate-400"
+    >
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
   return (
     <div className="relative h-[680px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
@@ -170,7 +231,7 @@ function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeS
               x2={`${p2.x}%`}
               y2={`${p2.y}%`}
               stroke="currentColor"
-              className={edge.type === "strong" ? (active ? "text-slate-400" : "text-slate-200") : (active ? "text-emerald-400" : "text-emerald-200")}
+              className={edge.type === "strong" ? (active ? "text-slate-400" : "text-slate-200") : active ? "text-emerald-400" : "text-emerald-200"}
               strokeWidth={edge.type === "strong" ? 2.2 : 2.4}
               strokeDasharray={edge.type === "weak" ? "6 5" : "0"}
             />
@@ -187,22 +248,19 @@ function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeS
         return (
           <motion.button
             key={student.id}
-            whileHover={{ scale: 1.06 }}
+            whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => onSelect(student.id)}
             className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
             style={{ left: `${p.x}%`, top: `${p.y}%`, minWidth: 72 }}
           >
             <div className="truncate">{student.label}</div>
-            <div className="mt-1 flex items-center justify-center gap-1 text-[10px] opacity-80">
-              {isStart && <span>起點</span>}
-              {!isStart && bridge && <span>橋樑位</span>}
-            </div>
+            <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : bridge ? "橋樑位" : ""}</div>
           </motion.button>
         );
       })}
 
-      <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 px-4 py-3 shadow-sm">
+      <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 px-4 py-3 shadow-sm ring-1 ring-slate-200 backdrop-blur">
         <div className="text-xs text-slate-500">圖例</div>
         <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-700">
           <span>— 強連結</span>
@@ -214,7 +272,7 @@ function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeS
   );
 }
 
-export default function StructuralHoleClassNetworkLab() {
+export default function App() {
   const [selectedStudentId, setSelectedStudentId] = useState(String(students[0].id));
   const [strongSelections, setStrongSelections] = useState([String(students[1].id), String(students[4].id), String(students[7].id)]);
   const [weakSelections, setWeakSelections] = useState([String(students[17].id), String(students[25].id)]);
@@ -228,10 +286,8 @@ export default function StructuralHoleClassNetworkLab() {
   const adjacency = useMemo(() => buildAdjacency(edges, mode), [edges, mode]);
   const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
   const bridgeScores = useMemo(() => computeBridgeScore(edges), [edges]);
-
   const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
   const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
-
   const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0];
   const selectedSubmission = submissions[selectedStudent.id];
   const completionCount = Object.keys(submissions).length;
@@ -285,15 +341,17 @@ export default function StructuralHoleClassNetworkLab() {
     });
   }
 
+  const studentOptions = students.map((student) => ({ value: String(student.id), label: student.label }));
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
-          <Card className="overflow-hidden rounded-[32px] border-0 shadow-sm">
+          <Card className="overflow-hidden">
             <CardContent className="p-8">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge className="rounded-full px-3 py-1 text-sm">全班社會網絡實驗</Badge>
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-sm">3 個強連結 × 2 個弱連結 × 訊息擴散</Badge>
+                <Badge dark>全班社會網絡實驗</Badge>
+                <Badge>3 個強連結 × 2 個弱連結 × 訊息擴散</Badge>
               </div>
               <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">從同學名單生成班級網絡</h1>
               <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
@@ -301,17 +359,17 @@ export default function StructuralHoleClassNetworkLab() {
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Card className="rounded-2xl border-0 shadow-sm"><CardContent className="p-5"><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></CardContent></Card>
-                <Card className="rounded-2xl border-0 shadow-sm"><CardContent className="p-5"><div className="text-sm text-slate-500">已提交連結</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">可替換為學生現場填答</div></CardContent></Card>
-                <Card className="rounded-2xl border-0 shadow-sm"><CardContent className="p-5"><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><Progress value={completionRate} className="h-2" /></div></CardContent></Card>
-                <Card className="rounded-2xl border-0 shadow-sm"><CardContent className="p-5"><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold">{students.find((s) => s.id === startId)?.label}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></CardContent></Card>
+                <Card><CardContent><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></CardContent></Card>
+                <Card><CardContent><div className="text-sm text-slate-500">已提交連結</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">目前為前端示範資料</div></CardContent></Card>
+                <Card><CardContent><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><ProgressBar value={completionRate} /></div></CardContent></Card>
+                <Card><CardContent><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold">{students.find((s) => s.id === startId)?.label}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></CardContent></Card>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-[32px] border-0 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-xl"><Target className="h-5 w-5" />課堂流程</CardTitle>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Target className="h-5 w-5" />課堂流程</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm leading-7 text-slate-600">
               {[
@@ -324,23 +382,25 @@ export default function StructuralHoleClassNetworkLab() {
                 <div key={item} className="flex items-start gap-2"><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" /><span>{item}</span></div>
               ))}
               <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
-                注意：名單中有兩位同名「李書緯」，此原型先暫以 A、B 區分，正式上課版建議加入學號或座號。
+                注意：名單中有兩位同名「李書緯」，此版本暫以 A、B 區分。正式上課建議再加學號或座號。
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
         <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-          <Card className="rounded-[32px] border-0 shadow-sm">
-            <CardHeader className="space-y-4 pb-3">
+          <Card>
+            <CardHeader className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2 text-2xl"><Radio className="h-5 w-5" />班級網絡圖</CardTitle>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant={mode === "all" ? "default" : "outline"} className="rounded-full" onClick={() => setMode("all")}>全部連結</Button>
-                  <Button variant={mode === "strongOnly" ? "default" : "outline"} className="rounded-full" onClick={() => setMode("strongOnly")}>只看強連結</Button>
-                  <Button variant={mode === "weakPriority" ? "default" : "outline"} className="rounded-full" onClick={() => setMode("weakPriority")}>弱連結優先</Button>
+                  <PrimaryButton active={mode === "all"} onClick={() => setMode("all")}>全部連結</PrimaryButton>
+                  <PrimaryButton active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</PrimaryButton>
+                  <PrimaryButton active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</PrimaryButton>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
               <NetworkGraph
                 edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
                 activeIds={activeIds}
@@ -349,23 +409,16 @@ export default function StructuralHoleClassNetworkLab() {
                 startId={startId}
                 bridgeScores={bridgeScores}
               />
-            </CardHeader>
+            </CardContent>
           </Card>
 
           <div className="grid gap-6">
-            <Card className="rounded-[32px] border-0 shadow-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-xl"><Users className="h-5 w-5" />學生填答區</CardTitle></CardHeader>
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />學生填答區</CardTitle></CardHeader>
               <CardContent className="space-y-5">
                 <div>
                   <div className="mb-2 text-sm text-slate-500">1. 選自己的名字</div>
-                  <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                    <SelectTrigger className="rounded-2xl"><SelectValue placeholder="請選擇你的名字" /></SelectTrigger>
-                    <SelectContent>
-                      {students.map((student) => (
-                        <SelectItem key={student.id} value={String(student.id)}>{student.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectField value={selectedStudentId} onChange={setSelectedStudentId} options={studentOptions} />
                 </div>
 
                 <div>
@@ -373,7 +426,7 @@ export default function StructuralHoleClassNetworkLab() {
                   <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
                     {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
                       <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                        <Checkbox checked={strongSelections.includes(String(student.id))} onCheckedChange={() => toggleStrong(String(student.id))} />
+                        <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
                         <span className="text-sm">{student.label}</span>
                       </label>
                     ))}
@@ -385,35 +438,28 @@ export default function StructuralHoleClassNetworkLab() {
                   <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
                     {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
                       <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                        <Checkbox checked={weakSelections.includes(String(student.id))} onCheckedChange={() => toggleWeak(String(student.id))} />
+                        <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
                         <span className="text-sm">{student.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                <Button className="w-full rounded-2xl" onClick={submitOwnNetwork}>送出我的網絡</Button>
+                <PrimaryButton className="w-full" active onClick={submitOwnNetwork}>送出我的網絡</PrimaryButton>
               </CardContent>
             </Card>
 
-            <Card className="rounded-[32px] border-0 shadow-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-xl"><Send className="h-5 w-5" />訊息傳播控制台</CardTitle></CardHeader>
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Send className="h-5 w-5" />訊息傳播控制台</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <div className="mb-2 text-sm text-slate-500">起始同學</div>
-                  <Select value={String(startId)} onValueChange={(v) => { setStartId(Number(v)); setStep(999); }}>
-                    <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {students.map((student) => (
-                        <SelectItem key={student.id} value={String(student.id)}>{student.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SelectField value={String(startId)} onChange={(v) => { setStartId(Number(v)); setStep(999); }} options={studentOptions} />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" className="rounded-2xl" onClick={playPropagation}><Play className="mr-2 h-4 w-4" />開始</Button>
-                  <Button variant="outline" className="rounded-2xl" onClick={advancePropagation}>下一步</Button>
-                  <Button variant="outline" className="rounded-2xl" onClick={resetPropagation}><RotateCcw className="mr-2 h-4 w-4" />全部顯示</Button>
+                  <PrimaryButton onClick={playPropagation}><Play className="mr-2 h-4 w-4" />開始</PrimaryButton>
+                  <PrimaryButton onClick={advancePropagation}>下一步</PrimaryButton>
+                  <PrimaryButton onClick={resetPropagation}><RotateCcw className="mr-2 h-4 w-4" />全部顯示</PrimaryButton>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                   <div className="font-medium text-slate-900">目前觀察</div>
@@ -424,22 +470,22 @@ export default function StructuralHoleClassNetworkLab() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[32px] border-0 shadow-sm">
-              <CardHeader><CardTitle className="flex items-center gap-2 text-xl"><Eye className="h-5 w-5" />角色解讀</CardTitle></CardHeader>
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5" />角色解讀</CardTitle></CardHeader>
               <CardContent className="space-y-4 text-sm leading-7 text-slate-600">
                 <div className="rounded-2xl border border-slate-200 p-4">
                   <div className="text-lg font-semibold text-slate-900">{selectedStudent.label}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="outline" className="rounded-full">強連結 {selectedSubmission?.strong?.length || 0} 人</Badge>
-                    <Badge variant="outline" className="rounded-full">弱連結 {selectedSubmission?.weak?.length || 0} 人</Badge>
-                    <Badge className="rounded-full">橋樑分數 {bridgeScores[selectedStudent.id]}</Badge>
+                    <Badge>強連結 {selectedSubmission?.strong?.length || 0} 人</Badge>
+                    <Badge>弱連結 {selectedSubmission?.weak?.length || 0} 人</Badge>
+                    <Badge dark>橋樑分數 {bridgeScores[selectedStudent.id]}</Badge>
                   </div>
                   <div className="mt-3 text-slate-600">
                     {bridgeScores[selectedStudent.id] >= 3
                       ? "這位同學在多個弱連結中被指向，可能是跨圈層的重要橋樑。"
                       : bridgeScores[selectedStudent.id] >= 1
-                      ? "這位同學至少連到弱連結，可能成為訊息跳出原圈層的出口。"
-                      : "這位同學目前主要在穩定的小圈圈內活動，較像強連結網絡中的成員。"}
+                        ? "這位同學至少連到弱連結，可能成為訊息跳出原圈層的出口。"
+                        : "這位同學目前主要在穩定的小圈圈內活動，較像強連結網絡中的成員。"}
                   </div>
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4">
