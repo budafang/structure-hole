@@ -1,16 +1,19 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-  <script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics-compat.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>班級社會網絡結構｜正式課堂版</title>
+  <title>班級社會網絡結構｜Firebase 即時版</title>
+
+  <script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics-compat.js"></script>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
   <style>
     body { font-family: Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
     select, button, input, textarea { outline: none; }
@@ -20,7 +23,30 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useMemo, useState } = React;
+    const { useMemo, useState, useEffect } = React;
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB469n0sq8KFvKvtdTxbW2DwHDRTKswekw",
+      authDomain: "structure-hole.firebaseapp.com",
+      projectId: "structure-hole",
+      storageBucket: "structure-hole.firebasestorage.app",
+      messagingSenderId: "338537191319",
+      appId: "1:338537191319:web:ffcd03d98863b7044bd6d2",
+      measurementId: "G-HVS8C3BT47"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    const db = firebase.firestore();
+    try {
+      firebase.analytics();
+    } catch (e) {
+      // analytics 在某些環境可能不可用，忽略即可
+    }
+
+    const CLASS_ID = "default";
 
     const defaultRosterText = `詹O婷
 黃O柔
@@ -128,82 +154,28 @@
         });
     }
 
-    function buildPositions(students, edges, degreeCounts) {
-      if (!students.length) return {};
-      const adjacency = {};
-      students.forEach((s) => { adjacency[s.id] = new Set(); });
-      edges.forEach((edge) => {
-        adjacency[edge.source]?.add(edge.target);
-        adjacency[edge.target]?.add(edge.source);
-      });
-
-      const visited = new Set();
-      const components = [];
-      for (const s of students) {
-        if (visited.has(s.id)) continue;
-        const queue = [s.id];
-        visited.add(s.id);
-        const comp = [];
-        while (queue.length) {
-          const cur = queue.shift();
-          comp.push(cur);
-          for (const nb of adjacency[cur]) {
-            if (!visited.has(nb)) {
-              visited.add(nb);
-              queue.push(nb);
-            }
-          }
-        }
-        components.push(comp);
-      }
-
-      const total = components.length;
-      const centers = components.map((comp, idx) => {
-        const angle = (Math.PI * 2 * idx) / Math.max(total, 1) - Math.PI / 2;
-        const radius = total === 1 ? 0 : 26;
-        return {
-          x: 50 + Math.cos(angle) * radius,
-          y: 50 + Math.sin(angle) * radius,
-        };
-      });
-
-      const positions = {};
-      components.forEach((comp, compIndex) => {
-        const center = centers[compIndex];
-        const sorted = [...comp].sort((a, b) => (degreeCounts[b] || 0) - (degreeCounts[a] || 0));
-        const localMax = Math.max(...sorted.map((id) => degreeCounts[id] || 0), 1);
-
-        sorted.forEach((id, localIndex) => {
-          const score = degreeCounts[id] || 0;
-          const normalized = score / localMax;
-          const ring = localIndex === 0 ? 0 : 8 + Math.floor(localIndex / 6) * 7 + (1 - normalized) * 4;
-          const angle = localIndex === 0 ? 0 : (Math.PI * 2 * (localIndex - 1)) / Math.max(sorted.length - 1, 1);
-          positions[id] = {
-            x: center.x + Math.cos(angle) * ring,
-            y: center.y + Math.sin(angle) * ring,
-          };
-        });
-      });
-
-      return positions;
-    }
-
-    function dedupeEdges(submissions) {
+    function dedupeEdges(submissions, labelToId) {
       const map = new Map();
-      Object.entries(submissions).forEach(([sourceId, links]) => {
-        (links.strong || []).forEach((target) => {
-          const a = Number(sourceId);
-          const b = Number(target);
-          const key = [Math.min(a, b), Math.max(a, b), "strong"].join("-");
-          map.set(key, { source: a, target: b, type: "strong" });
+
+      Object.entries(submissions).forEach(([sourceLabel, links]) => {
+        const sourceId = labelToId[sourceLabel];
+        if (!sourceId) return;
+
+        (links.strong || []).forEach((targetLabel) => {
+          const targetId = labelToId[targetLabel];
+          if (!targetId || targetId === sourceId) return;
+          const key = [Math.min(sourceId, targetId), Math.max(sourceId, targetId), "strong"].join("-");
+          map.set(key, { source: sourceId, target: targetId, type: "strong" });
         });
-        (links.weak || []).forEach((target) => {
-          const a = Number(sourceId);
-          const b = Number(target);
-          const key = [Math.min(a, b), Math.max(a, b), "weak"].join("-");
-          map.set(key, { source: a, target: b, type: "weak" });
+
+        (links.weak || []).forEach((targetLabel) => {
+          const targetId = labelToId[targetLabel];
+          if (!targetId || targetId === sourceId) return;
+          const key = [Math.min(sourceId, targetId), Math.max(sourceId, targetId), "weak"].join("-");
+          map.set(key, { source: sourceId, target: targetId, type: "weak" });
         });
       });
+
       return Array.from(map.values());
     }
 
@@ -212,17 +184,22 @@
       students.forEach((s) => {
         adjacency[s.id] = [];
       });
+
       edges.forEach((edge) => {
-        const weight = edge.type === "strong" ? 1 : mode === "weakPriority" ? 1 : 2;
         if (mode === "strongOnly" && edge.type === "weak") return;
+        const weight = edge.type === "strong" ? 1 : mode === "weakPriority" ? 1 : 2;
         adjacency[edge.source].push({ id: edge.target, type: edge.type, weight });
         adjacency[edge.target].push({ id: edge.source, type: edge.type, weight });
       });
+
       return adjacency;
     }
 
     function bfs(startId, adjacency) {
-      if (!startId || !adjacency[startId]) return { order: [], distance: {}, parent: {} };
+      if (!startId || !adjacency[startId]) {
+        return { order: [], distance: {}, parent: {} };
+      }
+
       const visited = new Set([startId]);
       const distance = { [startId]: 0 };
       const parent = {};
@@ -232,6 +209,7 @@
       while (queue.length) {
         const current = queue.shift();
         const neighbors = [...adjacency[current]].sort((a, b) => a.weight - b.weight);
+
         neighbors.forEach((next) => {
           if (!visited.has(next.id)) {
             visited.add(next.id);
@@ -250,14 +228,17 @@
       const degree = {};
       const normalized = {};
       students.forEach((s) => { degree[s.id] = 0; });
+
       edges.forEach((edge) => {
         degree[edge.source] += 1;
         degree[edge.target] += 1;
       });
+
       const n = students.length;
       students.forEach((s) => {
         normalized[s.id] = n > 1 ? degree[s.id] / (n - 1) : 0;
       });
+
       return { degree, normalized };
     }
 
@@ -265,6 +246,7 @@
       const ids = students.map((s) => s.id);
       const neighbors = {};
       ids.forEach((id) => { neighbors[id] = []; });
+
       edges.forEach((edge) => {
         neighbors[edge.source].push(edge.target);
         neighbors[edge.target].push(edge.source);
@@ -278,11 +260,13 @@
         const P = {};
         const sigma = {};
         const dist = {};
+
         ids.forEach((v) => {
           P[v] = [];
           sigma[v] = 0;
           dist[v] = -1;
         });
+
         sigma[s] = 1;
         dist[s] = 0;
         const Q = [s];
@@ -290,6 +274,7 @@
         while (Q.length) {
           const v = Q.shift();
           S.push(v);
+
           neighbors[v].forEach((w) => {
             if (dist[w] < 0) {
               Q.push(w);
@@ -332,6 +317,71 @@
       return { raw: CB, normalized };
     }
 
+    function buildPositions(students, edges, degreeCounts) {
+      if (!students.length) return {};
+
+      const adjacency = {};
+      students.forEach((s) => { adjacency[s.id] = new Set(); });
+      edges.forEach((edge) => {
+        adjacency[edge.source]?.add(edge.target);
+        adjacency[edge.target]?.add(edge.source);
+      });
+
+      const visited = new Set();
+      const components = [];
+
+      for (const s of students) {
+        if (visited.has(s.id)) continue;
+        const queue = [s.id];
+        visited.add(s.id);
+        const comp = [];
+
+        while (queue.length) {
+          const cur = queue.shift();
+          comp.push(cur);
+          for (const nb of adjacency[cur]) {
+            if (!visited.has(nb)) {
+              visited.add(nb);
+              queue.push(nb);
+            }
+          }
+        }
+
+        components.push(comp);
+      }
+
+      const total = components.length;
+      const centers = components.map((comp, idx) => {
+        const angle = (Math.PI * 2 * idx) / Math.max(total, 1) - Math.PI / 2;
+        const radius = total === 1 ? 0 : 26;
+        return {
+          x: 50 + Math.cos(angle) * radius,
+          y: 50 + Math.sin(angle) * radius,
+        };
+      });
+
+      const positions = {};
+
+      components.forEach((comp, compIndex) => {
+        const center = centers[compIndex];
+        const sorted = [...comp].sort((a, b) => (degreeCounts[b] || 0) - (degreeCounts[a] || 0));
+        const localMax = Math.max(...sorted.map((id) => degreeCounts[id] || 0), 1);
+
+        sorted.forEach((id, localIndex) => {
+          const score = degreeCounts[id] || 0;
+          const normalized = score / localMax;
+          const ring = localIndex === 0 ? 0 : 8 + Math.floor(localIndex / 6) * 7 + (1 - normalized) * 4;
+          const angle = localIndex === 0 ? 0 : (Math.PI * 2 * (localIndex - 1)) / Math.max(sorted.length - 1, 1);
+          positions[id] = {
+            x: center.x + Math.cos(angle) * ring,
+            y: center.y + Math.sin(angle) * ring,
+          };
+        });
+      });
+
+      return positions;
+    }
+
     function Card({ children, className = "" }) {
       return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
     }
@@ -362,6 +412,10 @@
           <div className="h-full rounded-full bg-slate-900" style={{ width: `${value}%` }}></div>
         </div>
       );
+    }
+
+    function fmt(num, digits = 3) {
+      return Number(num || 0).toFixed(digits);
     }
 
     function NetworkGraph({ students, positions, edges, activeIds, selectedId, onSelect, startId, betweennessRaw, degreeRaw }) {
@@ -396,6 +450,7 @@
             const isBridge = (betweennessRaw[student.id] || 0) > 0;
             const degree = degreeRaw[student.id] || 0;
             const sizeClass = degree >= 6 ? "min-w-[92px]" : degree >= 3 ? "min-w-[80px]" : "min-w-[72px]";
+
             return (
               <button
                 key={student.id}
@@ -422,10 +477,6 @@
       );
     }
 
-    function fmt(num, digits = 3) {
-      return Number(num || 0).toFixed(digits);
-    }
-
     function App() {
       const [rosterText, setRosterText] = useState(defaultRosterText);
       const [students, setStudents] = useState(() => parseRoster(defaultRosterText));
@@ -437,8 +488,57 @@
       const [startId, setStartId] = useState(1);
       const [mode, setMode] = useState("all");
       const [step, setStep] = useState(999);
+      const [submitMessage, setSubmitMessage] = useState("");
 
-      const edges = useMemo(() => dedupeEdges(submissions), [submissions]);
+      useEffect(() => {
+        const unsub = db.collection("classes").doc(CLASS_ID).onSnapshot((doc) => {
+          const data = doc.data();
+          if (!data) return;
+
+          if (data.rosterText) {
+            setRosterText(data.rosterText);
+            const parsed = parseRoster(data.rosterText);
+            setStudents(parsed);
+
+            if (parsed.length) {
+              setSelectedStudentId((prev) => prev || String(parsed[0].id));
+              setViewStudentId((prev) => prev || parsed[0].id);
+              setStartId((prev) => prev || parsed[0].id);
+            }
+          }
+        });
+
+        return () => unsub();
+      }, []);
+
+      useEffect(() => {
+        const unsub = db
+          .collection("classes")
+          .doc(CLASS_ID)
+          .collection("responses")
+          .onSnapshot((snapshot) => {
+            const next = {};
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              if (!data || !data.studentId) return;
+              next[data.studentId] = {
+                strong: data.strong || [],
+                weak: data.weak || []
+              };
+            });
+            setSubmissions(next);
+          });
+
+        return () => unsub();
+      }, []);
+
+      const labelToId = useMemo(() => {
+        const map = {};
+        students.forEach((s) => { map[s.label] = s.id; });
+        return map;
+      }, [students]);
+
+      const edges = useMemo(() => dedupeEdges(submissions, labelToId), [submissions, labelToId]);
       const degreeMetrics = useMemo(() => computeDegreeMetrics(students, edges), [students, edges]);
       const betweennessMetrics = useMemo(() => computeBetweennessCentrality(students, edges), [students, edges]);
       const positions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics]);
@@ -446,8 +546,9 @@
       const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
       const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
       const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
+
       const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0] || { id: 1, label: "", name: "" };
-      const selectedSubmission = submissions[selectedStudent.id] || { strong: [], weak: [] };
+      const selectedSubmission = submissions[selectedStudent.label] || { strong: [], weak: [] };
       const completionCount = Object.keys(submissions).length;
       const completionRate = students.length ? Math.round((completionCount / students.length) * 100) : 0;
 
@@ -461,12 +562,18 @@
         .sort((a, b) => (betweennessMetrics.raw[b.id] || 0) - (betweennessMetrics.raw[a.id] || 0))
         .slice(0, 5);
 
-      function rebuildClass() {
+      async function rebuildClass() {
         const parsed = parseRoster(rosterText);
         if (!parsed.length) {
           alert("請先貼上至少一位學生姓名");
           return;
         }
+
+        await db.collection("classes").doc(CLASS_ID).set({
+          rosterText,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
         setStudents(parsed);
         setSubmissions({});
         setSelectedStudentId(String(parsed[0].id));
@@ -493,16 +600,34 @@
         });
       }
 
-      function submitOwnNetwork() {
+      async function submitOwnNetwork() {
         const sourceId = Number(selectedStudentId);
-        setSubmissions((prev) => ({
-          ...prev,
-          [sourceId]: {
-            strong: strongSelections.map(Number),
-            weak: weakSelections.map(Number),
-          },
-        }));
+        const student = students.find((s) => s.id === sourceId);
+        if (!student) return;
+
+        const payload = {
+          studentId: student.label,
+          strong: strongSelections
+            .map(Number)
+            .map((id) => students.find((s) => s.id === id)?.label)
+            .filter(Boolean),
+          weak: weakSelections
+            .map(Number)
+            .map((id) => students.find((s) => s.id === id)?.label)
+            .filter(Boolean),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        await db
+          .collection("classes")
+          .doc(CLASS_ID)
+          .collection("responses")
+          .doc(student.label)
+          .set(payload, { merge: true });
+
         setViewStudentId(sourceId);
+        setSubmitMessage("已送出");
+        setTimeout(() => setSubmitMessage(""), 2000);
       }
 
       function resetPropagation() {
@@ -528,7 +653,7 @@
                 <div className="p-8">
                   <div className="flex flex-wrap items-center gap-3">
                     <Badge dark={true}>正式 SNA 指標版</Badge>
-                    <Badge>先貼名單，再開始</Badge>
+                    <Badge>Firebase 即時同步</Badge>
                     <Badge>Degree + Betweenness</Badge>
                   </div>
                   <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">班級社會網絡結構</h1>
@@ -633,6 +758,12 @@
                       </div>
 
                       <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出目前選擇</Button>
+
+                      {submitMessage && (
+                        <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                          {submitMessage}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>
