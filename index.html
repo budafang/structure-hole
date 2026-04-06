@@ -377,25 +377,11 @@
 
       function submitOwnNetwork() {
         const sourceId = Number(selectedStudentId);
-        if (strongSelections.length !== 3 || weakSelections.length !== 2) {
-          alert("請選滿 3 位強連結與 2 位弱連結");
-          return;
-        }
-        setSubmissions((prev) => ({
-          ...prev,
-          [sourceId]: {
-            strong: strongSelections.map(Number),
-            weak: weakSelections.map(Number),
+        eak: weakSelections.map(Number),
           },
         }));
-        setViewStudentId(sourceId);
-      }
-
-      function resetPropagation() {
-        setStep(999);
-      }
-
-      function playPropagation() {
+        setViewStudentId(sourceIdstrong: strongSelections.map(Number),
+            weak: weakSelections.map(Number),  function playPropagation() {
         setStep(1);
       }
 
@@ -453,10 +439,10 @@
               </Card>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+            <div className="grid gap-6 xl:grid-cols-[1.72fr_0.72fr]">
               <Card>
                 <div className="p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div cla<div className="grid gap-6 xl:grid-cols-[1.72fr_0.72fr]">">
                     <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
                     <div className="flex flex-wrap gap-2">
                       <Button active={mode === "all"} onClick={() => setMode("all")}>全部連結</Button>
@@ -494,9 +480,8 @@
                       </div>
 
                       <div>
-                        <div className="mb-2 text-sm text-slate-500">2. 指出 3 位強連結</div>
-                        <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
-                          {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
+                        <div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div>
+                        <div className="max-h-44 space-y-2 overflow-auto roun<div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div> {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
                             <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
                               <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
                               <span className="text-sm">{student.label}</span>
@@ -506,7 +491,7 @@
                       </div>
 
                       <div>
-                        <div className="mb-2 text-sm text-slate-500">3. 指出 2 位弱連結</div>
+                        <div className="mb-2 text-sm text-slate-500">3. 指出最多 2 位弱連結</div>
                         <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
                           {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
                             <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
@@ -517,14 +502,10 @@
                         </div>
                       </div>
 
-                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出我的網絡</Button>
+                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出目前選擇</But
                     </div>
                   </div>
-                </Card>
-
-                <Card>
-                  <div className="p-6">
-                    <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
+                         <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
                     <div className="mt-4 space-y-4">
                       <div>
                         <div className="mb-2 text-sm text-slate-500">起始同學</div>
