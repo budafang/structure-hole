@@ -17,13 +17,14 @@
   <style>
     body { font-family: Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
     select, button, input, textarea { outline: none; }
+    button { -webkit-tap-highlight-color: transparent; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useMemo, useState, useEffect } = React;
+    const { useMemo, useState, useEffect, useRef } = React;
 
     const firebaseConfig = {
       apiKey: "AIzaSyB469n0sq8KFvKvtdTxbW2DwHDRTKswekw",
@@ -315,10 +316,24 @@
       return { raw: CB, normalized };
     }
 
+    function getNodeMargin(degree = 0) {
+      if (degree >= 6) return { x: 9, y: 7 };
+      if (degree >= 3) return { x: 8, y: 6.5 };
+      return { x: 7, y: 6 };
+    }
+
+    function clampNodePosition(x, y, degree = 0) {
+      const margin = getNodeMargin(degree);
+      return {
+        x: Math.max(margin.x, Math.min(100 - margin.x, x)),
+        y: Math.max(margin.y, Math.min(100 - margin.y, y)),
+      };
+    }
+
     function buildPositions(students, edges, degreeCounts) {
       if (!students.length) return {};
 
-      // 初始無連結：改成分散式排法
+      // 初始無連結：分散式排法 + 邊界限制
       if (!edges.length) {
         const positions = {};
         const count = students.length;
@@ -326,8 +341,8 @@
         const cols = Math.ceil(Math.sqrt(count * 1.6));
         const rows = Math.ceil(count / cols);
 
-        const left = 8;
-        const right = 92;
+        const left = 10;
+        const right = 90;
         const top = 12;
         const bottom = 88;
 
@@ -342,16 +357,17 @@
           const jitterX = ((index * 17) % 7 - 3) * 0.35;
           const jitterY = ((index * 13) % 5 - 2) * 0.35;
 
-          positions[student.id] = {
-            x: Math.min(right, left + col * xGap + offset + jitterX),
-            y: Math.min(bottom, top + row * yGap + jitterY),
-          };
+          const rawX = left + col * xGap + offset + jitterX;
+          const rawY = top + row * yGap + jitterY;
+          const degree = degreeCounts[student.id] || 0;
+
+          positions[student.id] = clampNodePosition(rawX, rawY, degree);
         });
 
         return positions;
       }
 
-      // 有連結後：多中心群聚布局
+      // 有連結後：多中心群聚布局 + 邊界限制
       const adjacency = {};
       students.forEach((s) => { adjacency[s.id] = new Set(); });
 
@@ -386,7 +402,7 @@
       const total = components.length;
       const centers = components.map((comp, idx) => {
         const angle = (Math.PI * 2 * idx) / Math.max(total, 1) - Math.PI / 2;
-        const radius = total === 1 ? 0 : 26;
+        const radius = total === 1 ? 0 : 24;
         return {
           x: 50 + Math.cos(angle) * radius,
           y: 50 + Math.sin(angle) * radius,
@@ -406,10 +422,10 @@
           const ring = localIndex === 0 ? 0 : 8 + Math.floor(localIndex / 6) * 7 + (1 - normalized) * 4;
           const angle = localIndex === 0 ? 0 : (Math.PI * 2 * (localIndex - 1)) / Math.max(sorted.length - 1, 1);
 
-          positions[id] = {
-            x: center.x + Math.cos(angle) * ring,
-            y: center.y + Math.sin(angle) * ring,
-          };
+          const rawX = center.x + Math.cos(angle) * ring;
+          const rawY = center.y + Math.sin(angle) * ring;
+
+          positions[id] = clampNodePosition(rawX, rawY, score);
         });
       });
 
@@ -452,14 +468,74 @@
       return Number(num || 0).toFixed(digits);
     }
 
-    function NetworkGraph({ students, positions, edges, activeIds, selectedId, onSelect, startId, betweennessRaw, degreeRaw }) {
+    function NetworkGraph({
+      students,
+      positions,
+      edges,
+      activeIds,
+      selectedId,
+      onSelect,
+      startId,
+      betweennessRaw,
+      degreeRaw,
+      onMoveNode
+    }) {
+      const containerRef = useRef(null);
+      const draggingRef = useRef(null);
+
+      function updateNodePosition(clientX, clientY) {
+        const dragging = draggingRef.current;
+        const container = containerRef.current;
+        if (!dragging || !container) return;
+
+        const rect = container.getBoundingClientRect();
+        const rawX = ((clientX - rect.left) / rect.width) * 100;
+        const rawY = ((clientY - rect.top) / rect.height) * 100;
+        const degree = degreeRaw[dragging.id] || 0;
+        const clamped = clampNodePosition(rawX, rawY, degree);
+
+        onMoveNode(dragging.id, clamped);
+      }
+
+      function handlePointerMove(e) {
+        if (!draggingRef.current) return;
+        e.preventDefault();
+        updateNodePosition(e.clientX, e.clientY);
+      }
+
+      function stopDragging() {
+        draggingRef.current = null;
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", stopDragging);
+      }
+
+      function startDragging(e, id) {
+        e.preventDefault();
+        e.stopPropagation();
+        draggingRef.current = { id };
+        onSelect(id);
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", stopDragging);
+      }
+
+      useEffect(() => {
+        return () => {
+          window.removeEventListener("pointermove", handlePointerMove);
+          window.removeEventListener("pointerup", stopDragging);
+        };
+      }, []);
+
       return (
-        <div className="relative h-[720px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
+        <div
+          ref={containerRef}
+          className="relative h-[720px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white"
+        >
           <svg className="absolute inset-0 h-full w-full">
             {edges.map((edge, idx) => {
               const p1 = positions[edge.source] || { x: 50, y: 50 };
               const p2 = positions[edge.target] || { x: 50, y: 50 };
               const active = activeIds.has(edge.source) && activeIds.has(edge.target);
+
               return (
                 <line
                   key={idx}
@@ -468,7 +544,11 @@
                   x2={`${p2.x}%`}
                   y2={`${p2.y}%`}
                   stroke="currentColor"
-                  className={edge.type === "strong" ? (active ? "text-slate-400" : "text-slate-200") : (active ? "text-emerald-400" : "text-emerald-200")}
+                  className={
+                    edge.type === "strong"
+                      ? (active ? "text-slate-400" : "text-slate-200")
+                      : (active ? "text-emerald-400" : "text-emerald-200")
+                  }
                   strokeWidth={edge.type === "strong" ? 2.2 : 2.4}
                   strokeDasharray={edge.type === "weak" ? "6 5" : "0"}
                 />
@@ -489,11 +569,21 @@
               <button
                 key={student.id}
                 onClick={() => onSelect(student.id)}
+                onPointerDown={(e) => startDragging(e, student.id)}
                 className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${sizeClass} ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
-                style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                style={{
+                  left: `${p.x}%`,
+                  top: `${p.y}%`,
+                  cursor: "grab",
+                  userSelect: "none",
+                  touchAction: "none"
+                }}
+                title="可拖曳移動節點"
               >
                 <div className="truncate">{student.label}</div>
-                <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : isBridge ? "橋樑位" : ""}</div>
+                <div className="mt-1 text-[10px] opacity-80">
+                  {isStart ? "起點" : isBridge ? "橋樑位" : ""}
+                </div>
               </button>
             );
           })}
@@ -505,6 +595,7 @@
               <span className="text-emerald-600">- - 弱連結</span>
               <span>綠色節點＝已收到訊息</span>
               <span>節點越大＝度中心性越高</span>
+              <span>可直接拖曳節點調整位置</span>
             </div>
           </div>
         </div>
@@ -523,6 +614,7 @@
       const [mode, setMode] = useState("all");
       const [step, setStep] = useState(999);
       const [submitMessage, setSubmitMessage] = useState("");
+      const [manualPositions, setManualPositions] = useState({});
 
       useEffect(() => {
         const unsub = db.collection("classes").doc(CLASS_ID).onSnapshot((doc) => {
@@ -575,14 +667,22 @@
       const edges = useMemo(() => dedupeEdges(submissions, labelToId), [submissions, labelToId]);
       const degreeMetrics = useMemo(() => computeDegreeMetrics(students, edges), [students, edges]);
       const betweennessMetrics = useMemo(() => computeBetweennessCentrality(students, edges), [students, edges]);
-      const positions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics.degree]);
+      const autoPositions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics.degree]);
+
+      const positions = useMemo(() => {
+        const merged = { ...autoPositions };
+        Object.entries(manualPositions).forEach(([id, pos]) => {
+          merged[id] = pos;
+        });
+        return merged;
+      }, [autoPositions, manualPositions]);
+
       const adjacency = useMemo(() => buildAdjacency(students, edges, mode), [students, edges, mode]);
       const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
       const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
       const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
 
       const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0] || { id: 1, label: "", name: "" };
-      const selectedSubmission = submissions[selectedStudent.label] || { strong: [], weak: [] };
       const completionCount = Object.keys(submissions).length;
       const completionRate = students.length ? Math.round((completionCount / students.length) * 100) : 0;
 
@@ -610,6 +710,7 @@
 
         setStudents(parsed);
         setSubmissions({});
+        setManualPositions({});
         setSelectedStudentId(String(parsed[0].id));
         setViewStudentId(parsed[0].id);
         setStartId(parsed[0].id);
@@ -679,6 +780,17 @@
         });
       }
 
+      function handleMoveNode(id, pos) {
+        setManualPositions((prev) => ({
+          ...prev,
+          [id]: pos
+        }));
+      }
+
+      function resetLayout() {
+        setManualPositions({});
+      }
+
       return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
           <div className="mx-auto max-w-[1650px] px-6 py-8 lg:px-10">
@@ -691,10 +803,16 @@
                       <Button active={mode === "all"} onClick={() => setMode("all")}>全部連結</Button>
                       <Button active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</Button>
                       <Button active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</Button>
+                      <Button onClick={resetLayout}>重設節點位置</Button>
                     </div>
                   </div>
                 </div>
-                <div className="p-6 pt-0">
+                <div className="px-6 pb-2">
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    可直接用滑鼠拖曳節點，自由調整網絡圖位置；若想恢復自動排列，按「重設節點位置」。
+                  </div>
+                </div>
+                <div className="p-6 pt-4">
                   <NetworkGraph
                     students={students}
                     positions={positions}
@@ -705,6 +823,7 @@
                     startId={startId}
                     betweennessRaw={betweennessMetrics.raw}
                     degreeRaw={degreeMetrics.degree}
+                    onMoveNode={handleMoveNode}
                   />
                 </div>
               </Card>
@@ -779,7 +898,11 @@
                         <div className="font-medium text-slate-900">目前觀察</div>
                         <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
                         <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
-                        <div className="mt-1 break-words">傳播順序：{shownOrder.length === 0 ? "尚未建立可傳播的網絡" : `${shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}${shownOrder.length > 8 ? " …" : ""}`}</div>
+                        <div className="mt-1">填答進度：{completionCount} / {students.length} 人（{completionRate}%）</div>
+                        <div className="mt-3"><ProgressBar value={completionRate} /></div>
+                        <div className="mt-3 break-words">
+                          傳播順序：{shownOrder.length === 0 ? "尚未建立可傳播的網絡" : `${shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}${shownOrder.length > 8 ? " …" : ""}`}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -809,7 +932,10 @@
                             <div className="text-slate-500">目前尚未形成足夠連結。</div>
                           ) : (
                             topDegree.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">度數 {degreeMetrics.degree[student.id]}｜中心性 {fmt(degreeMetrics.normalized[student.id])}</span></div>
+                              <div key={student.id} className="flex items-center justify-between gap-4">
+                                <span>{student.label}</span>
+                                <span className="text-slate-500">度數 {degreeMetrics.degree[student.id]}｜中心性 {fmt(degreeMetrics.normalized[student.id])}</span>
+                              </div>
                             ))
                           )}
                         </div>
@@ -822,7 +948,10 @@
                             <div className="text-slate-500">目前尚未形成可計算的橋樑位置。</div>
                           ) : (
                             topBetweenness.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">原始值 {fmt(betweennessMetrics.raw[student.id])}｜標準化 {fmt(betweennessMetrics.normalized[student.id])}</span></div>
+                              <div key={student.id} className="flex items-center justify-between gap-4">
+                                <span>{student.label}</span>
+                                <span className="text-slate-500">原始值 {fmt(betweennessMetrics.raw[student.id])}｜標準化 {fmt(betweennessMetrics.normalized[student.id])}</span>
+                              </div>
                             ))
                           )}
                         </div>
@@ -830,7 +959,9 @@
 
                       <div className="rounded-2xl bg-slate-900 p-4 text-white">
                         <div className="font-medium">一句話帶走</div>
-                        <div className="mt-1 text-white/80">度中心性高的人，不一定是中介中心性高的人。朋友很多的人，未必就是最能連接不同群體的人。</div>
+                        <div className="mt-1 text-white/80">
+                          度中心性高的人，不一定是中介中心性高的人。朋友很多的人，未必就是最能連接不同群體的人。
+                        </div>
                       </div>
                     </div>
                   </div>
