@@ -1,510 +1,503 @@
-import React, { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  Users,
-  Play,
-  RotateCcw,
-  ArrowRight,
-  Radio,
-  Target,
-  Eye,
-  Send,
-  GitBranch,
-} from "lucide-react";
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>結構洞班級網絡實驗</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { font-family: Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+    select, button, input { outline: none; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div id="root"></div>
 
-const rawRoster = [
-  "詹雁婷", "黃家柔", "姚宇倢", "王瑜凡", "謝絲語", "劉亭瑜", "簡佑軒", "李章鴻", "黃涵溱", "蘇琇萍",
-  "謝函妤", "葉珈伶", "鄭皓勻", "林芸葶", "黃思媛", "粘凱柔", "張詠淇", "張恩臨", "陳馨美", "王晨庭",
-  "陳楷鈞", "郭品涵", "鍾宥嫀", "施沛宇", "王廷睿", "陳思嫺", "徐靖晴", "陳筠蓁", "鍾秉諺", "林敬倫",
-  "陳思澔", "徐翊薰", "林采萱", "岑子薰", "黎佩彤", "熊苡寧", "羅宇宣", "黃千芳", "吳宜錚", "陳玟媛",
-  "蔡淳璿", "莊晴閔", "林依璇", "鄧芷安", "鄧修源", "林宸安", "向文軒", "邱顗帆", "張馨慈", "林佳穎",
-  "李杰紘", "趙芷宜", "陳齊寧", "梅若婕", "劉禹彤", "劉郁鈺", "何欣嬡", "陳照恩", "許芙瑄", "鄭恩伃",
-  "房怡杉", "范瑞麟", "卓聿澤", "顏祥恩", "朱紘緯", "王瑜偵", "李書緯", "陳姮伃", "凌婧綸", "黃芝茜",
-  "劉思晴", "白宸瑜", "李書緯", "鄭孚玉", "朱翊安", "趙佑昕"
-];
+  <script type="text/babel">
+    const { useMemo, useState } = React;
 
-const strokeCollator = new Intl.Collator("zh-Hant-u-co-stroke");
-const duplicateCount = rawRoster.reduce((acc, name) => {
-  acc[name] = (acc[name] || 0) + 1;
-  return acc;
-}, {});
-const seenDuplicate = {};
+    const rawRoster = [
+      "詹雁婷", "黃家柔", "姚宇倢", "王瑜凡", "謝絲語", "劉亭瑜", "簡佑軒", "李章鴻", "黃涵溱", "蘇琇萍",
+      "謝函妤", "葉珈伶", "鄭皓勻", "林芸葶", "黃思媛", "粘凱柔", "張詠淇", "張恩臨", "陳馨美", "王晨庭",
+      "陳楷鈞", "郭品涵", "鍾宥嫀", "施沛宇", "王廷睿", "陳思嫺", "徐靖晴", "陳筠蓁", "鍾秉諺", "林敬倫",
+      "陳思澔", "徐翊薰", "林采萱", "岑子薰", "黎佩彤", "熊苡寧", "羅宇宣", "黃千芳", "吳宜錚", "陳玟媛",
+      "蔡淳璿", "莊晴閔", "林依璇", "鄧芷安", "鄧修源", "林宸安", "向文軒", "邱顗帆", "張馨慈", "林佳穎",
+      "李杰紘", "趙芷宜", "陳齊寧", "梅若婕", "劉禹彤", "劉郁鈺", "何欣嬡", "陳照恩", "許芙瑄", "鄭恩伃",
+      "房怡杉", "范瑞麟", "卓聿澤", "顏祥恩", "朱紘緯", "王瑜偵", "李書緯", "陳姮伃", "凌婧綸", "黃芝茜",
+      "劉思晴", "白宸瑜", "李書緯", "鄭孚玉", "朱翊安", "趙佑昕"
+    ];
 
-const students = [...rawRoster]
-  .sort((a, b) => strokeCollator.compare(a, b))
-  .map((name, index) => {
-    if (duplicateCount[name] > 1) {
-      seenDuplicate[name] = (seenDuplicate[name] || 0) + 1;
+    const strokeCollator = new Intl.Collator("zh-Hant-u-co-stroke");
+    const duplicateCount = rawRoster.reduce((acc, name) => {
+      acc[name] = (acc[name] || 0) + 1;
+      return acc;
+    }, {});
+    const seenDuplicate = {};
+
+    const students = [...rawRoster]
+      .sort((a, b) => strokeCollator.compare(a, b))
+      .map((name, index) => {
+        if (duplicateCount[name] > 1) {
+          seenDuplicate[name] = (seenDuplicate[name] || 0) + 1;
+        }
+        const suffix = duplicateCount[name] > 1 ? `（${String.fromCharCode(64 + seenDuplicate[name])}）` : "";
+        return {
+          id: index + 1,
+          name,
+          label: `${name}${suffix}`,
+        };
+      });
+
+    function createSeedSubmissions(list) {
+      const total = list.length;
+      const result = {};
+      list.forEach((student) => {
+        const id = student.id;
+        const strong = [
+          ((id + 0) % total) + 1,
+          ((id + 5) % total) + 1,
+          ((id + 11) % total) + 1,
+        ]
+          .filter((target, idx, arr) => target !== id && arr.indexOf(target) === idx)
+          .slice(0, 3);
+        const weak = [
+          ((id + 17) % total) + 1,
+          ((id + 29) % total) + 1,
+        ]
+          .filter((target, idx, arr) => target !== id && !strong.includes(target) && arr.indexOf(target) === idx)
+          .slice(0, 2);
+        result[id] = { strong, weak };
+      });
+      return result;
     }
-    const suffix = duplicateCount[name] > 1 ? `（${String.fromCharCode(64 + seenDuplicate[name])}）` : "";
-    return {
-      id: index + 1,
-      name,
-      label: `${name}${suffix}`,
-    };
-  });
 
-function createSeedSubmissions(list) {
-  const total = list.length;
-  const result = {};
-  list.forEach((student) => {
-    const id = student.id;
-    const strong = [
-      ((id + 0) % total) + 1,
-      ((id + 5) % total) + 1,
-      ((id + 11) % total) + 1,
-    ]
-      .filter((target, idx, arr) => target !== id && arr.indexOf(target) === idx)
-      .slice(0, 3);
-    const weak = [
-      ((id + 17) % total) + 1,
-      ((id + 29) % total) + 1,
-    ]
-      .filter((target, idx, arr) => target !== id && !strong.includes(target) && arr.indexOf(target) === idx)
-      .slice(0, 2);
-    result[id] = { strong, weak };
-  });
-  return result;
-}
+    const seedSubmissions = createSeedSubmissions(students);
 
-const seedSubmissions = createSeedSubmissions(students);
-
-const polar = students.map((student, index) => {
-  const total = students.length;
-  const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
-  const ring = index < 38 ? 34 : 22;
-  const x = 50 + Math.cos(angle) * (ring + (index % 3) * 4);
-  const y = 50 + Math.sin(angle) * (ring + (index % 3) * 4);
-  return { id: student.id, x, y };
-});
-
-const positionMap = Object.fromEntries(polar.map((p) => [p.id, p]));
-
-function dedupeEdges(submissions) {
-  const map = new Map();
-  Object.entries(submissions).forEach(([sourceId, links]) => {
-    links.strong.forEach((target) => {
-      const a = Number(sourceId);
-      const b = Number(target);
-      const key = [Math.min(a, b), Math.max(a, b), "strong"].join("-");
-      map.set(key, { source: a, target: b, type: "strong" });
+    const polar = students.map((student, index) => {
+      const total = students.length;
+      const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
+      const ring = index < 38 ? 34 : 22;
+      const x = 50 + Math.cos(angle) * (ring + (index % 3) * 4);
+      const y = 50 + Math.sin(angle) * (ring + (index % 3) * 4);
+      return { id: student.id, x, y };
     });
-    links.weak.forEach((target) => {
-      const a = Number(sourceId);
-      const b = Number(target);
-      const key = [Math.min(a, b), Math.max(a, b), "weak"].join("-");
-      map.set(key, { source: a, target: b, type: "weak" });
-    });
-  });
-  return Array.from(map.values());
-}
 
-function buildAdjacency(edges, mode) {
-  const adjacency = {};
-  students.forEach((s) => {
-    adjacency[s.id] = [];
-  });
-  edges.forEach((edge) => {
-    const weight = edge.type === "strong" ? 1 : mode === "weakPriority" ? 1 : 2;
-    if (mode === "strongOnly" && edge.type === "weak") return;
-    adjacency[edge.source].push({ id: edge.target, type: edge.type, weight });
-    adjacency[edge.target].push({ id: edge.source, type: edge.type, weight });
-  });
-  return adjacency;
-}
+    const positionMap = Object.fromEntries(polar.map((p) => [p.id, p]));
 
-function bfs(startId, adjacency) {
-  if (!startId) return { order: [], distance: {}, parent: {} };
-  const visited = new Set([startId]);
-  const distance = { [startId]: 0 };
-  const parent = {};
-  const order = [startId];
-  const queue = [startId];
+    function dedupeEdges(submissions) {
+      const map = new Map();
+      Object.entries(submissions).forEach(([sourceId, links]) => {
+        links.strong.forEach((target) => {
+          const a = Number(sourceId);
+          const b = Number(target);
+          const key = [Math.min(a, b), Math.max(a, b), "strong"].join("-");
+          map.set(key, { source: a, target: b, type: "strong" });
+        });
+        links.weak.forEach((target) => {
+          const a = Number(sourceId);
+          const b = Number(target);
+          const key = [Math.min(a, b), Math.max(a, b), "weak"].join("-");
+          map.set(key, { source: a, target: b, type: "weak" });
+        });
+      });
+      return Array.from(map.values());
+    }
 
-  while (queue.length) {
-    const current = queue.shift();
-    const neighbors = [...adjacency[current]].sort((a, b) => a.weight - b.weight);
-    neighbors.forEach((next) => {
-      if (!visited.has(next.id)) {
-        visited.add(next.id);
-        distance[next.id] = distance[current] + 1;
-        parent[next.id] = current;
-        order.push(next.id);
-        queue.push(next.id);
+    function buildAdjacency(edges, mode) {
+      const adjacency = {};
+      students.forEach((s) => {
+        adjacency[s.id] = [];
+      });
+      edges.forEach((edge) => {
+        const weight = edge.type === "strong" ? 1 : mode === "weakPriority" ? 1 : 2;
+        if (mode === "strongOnly" && edge.type === "weak") return;
+        adjacency[edge.source].push({ id: edge.target, type: edge.type, weight });
+        adjacency[edge.target].push({ id: edge.source, type: edge.type, weight });
+      });
+      return adjacency;
+    }
+
+    function bfs(startId, adjacency) {
+      if (!startId) return { order: [], distance: {}, parent: {} };
+      const visited = new Set([startId]);
+      const distance = { [startId]: 0 };
+      const parent = {};
+      const order = [startId];
+      const queue = [startId];
+
+      while (queue.length) {
+        const current = queue.shift();
+        const neighbors = [...adjacency[current]].sort((a, b) => a.weight - b.weight);
+        neighbors.forEach((next) => {
+          if (!visited.has(next.id)) {
+            visited.add(next.id);
+            distance[next.id] = distance[current] + 1;
+            parent[next.id] = current;
+            order.push(next.id);
+            queue.push(next.id);
+          }
+        });
       }
-    });
-  }
 
-  return { order, distance, parent };
-}
-
-function computeBridgeScore(edges) {
-  const counts = {};
-  students.forEach((s) => {
-    counts[s.id] = 0;
-  });
-  edges.forEach((edge) => {
-    if (edge.type === "weak") {
-      counts[edge.source] += 1;
-      counts[edge.target] += 1;
+      return { order, distance, parent };
     }
-  });
-  return counts;
-}
 
-function Card({ children, className = "" }) {
-  return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
-}
+    function computeBridgeScore(edges) {
+      const counts = {};
+      students.forEach((s) => {
+        counts[s.id] = 0;
+      });
+      edges.forEach((edge) => {
+        if (edge.type === "weak") {
+          counts[edge.source] += 1;
+          counts[edge.target] += 1;
+        }
+      });
+      return counts;
+    }
 
-function CardHeader({ children, className = "" }) {
-  return <div className={`p-6 pb-0 ${className}`}>{children}</div>;
-}
+    function Card({ children, className = "" }) {
+      return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
+    }
 
-function CardContent({ children, className = "" }) {
-  return <div className={`p-6 ${className}`}>{children}</div>;
-}
+    function Badge({ children, dark = false }) {
+      return (
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm ${dark ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>
+          {children}
+        </span>
+      );
+    }
 
-function CardTitle({ children, className = "" }) {
-  return <div className={`text-xl font-semibold text-slate-900 ${className}`}>{children}</div>;
-}
+    function Button({ children, onClick, active = false, className = "" }) {
+      return (
+        <button
+          onClick={onClick}
+          className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${className}`}
+        >
+          {children}
+        </button>
+      );
+    }
 
-function Badge({ children, dark = false }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-sm ${dark ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function PrimaryButton({ children, onClick, active = false, className = "", type = "button" }) {
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ProgressBar({ value }) {
-  return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-      <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${value}%` }} />
-    </div>
-  );
-}
-
-function SelectField({ value, onChange, options, placeholder }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 focus:border-slate-400"
-    >
-      {placeholder && <option value="">{placeholder}</option>}
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
-  return (
-    <div className="relative h-[680px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
-      <svg className="absolute inset-0 h-full w-full">
-        {edges.map((edge, idx) => {
-          const p1 = positionMap[edge.source];
-          const p2 = positionMap[edge.target];
-          const active = activeIds.has(edge.source) && activeIds.has(edge.target);
-          return (
-            <line
-              key={idx}
-              x1={`${p1.x}%`}
-              y1={`${p1.y}%`}
-              x2={`${p2.x}%`}
-              y2={`${p2.y}%`}
-              stroke="currentColor"
-              className={edge.type === "strong" ? (active ? "text-slate-400" : "text-slate-200") : active ? "text-emerald-400" : "text-emerald-200"}
-              strokeWidth={edge.type === "strong" ? 2.2 : 2.4}
-              strokeDasharray={edge.type === "weak" ? "6 5" : "0"}
-            />
-          );
-        })}
-      </svg>
-
-      {students.map((student) => {
-        const p = positionMap[student.id];
-        const selected = selectedId === student.id;
-        const active = activeIds.has(student.id);
-        const isStart = startId === student.id;
-        const bridge = bridgeScores[student.id] >= 3;
-        return (
-          <motion.button
-            key={student.id}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => onSelect(student.id)}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
-            style={{ left: `${p.x}%`, top: `${p.y}%`, minWidth: 72 }}
-          >
-            <div className="truncate">{student.label}</div>
-            <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : bridge ? "橋樑位" : ""}</div>
-          </motion.button>
-        );
-      })}
-
-      <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 px-4 py-3 shadow-sm ring-1 ring-slate-200 backdrop-blur">
-        <div className="text-xs text-slate-500">圖例</div>
-        <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-700">
-          <span>— 強連結</span>
-          <span className="text-emerald-600">- - 弱連結</span>
-          <span>綠色節點＝已收到訊息</span>
+    function ProgressBar({ value }) {
+      return (
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-slate-900" style={{ width: `${value}%` }}></div>
         </div>
-      </div>
-    </div>
-  );
-}
+      );
+    }
 
-export default function App() {
-  const [selectedStudentId, setSelectedStudentId] = useState(String(students[0].id));
-  const [strongSelections, setStrongSelections] = useState([String(students[1].id), String(students[4].id), String(students[7].id)]);
-  const [weakSelections, setWeakSelections] = useState([String(students[17].id), String(students[25].id)]);
-  const [submissions, setSubmissions] = useState(seedSubmissions);
-  const [viewStudentId, setViewStudentId] = useState(1);
-  const [startId, setStartId] = useState(1);
-  const [mode, setMode] = useState("all");
-  const [step, setStep] = useState(999);
+    function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
+      return (
+        <div className="relative h-[680px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
+          <svg className="absolute inset-0 h-full w-full">
+            {edges.map((edge, idx) => {
+              const p1 = positionMap[edge.source];
+              const p2 = positionMap[edge.target];
+              const active = activeIds.has(edge.source) && activeIds.has(edge.target);
+              return (
+                <line
+                  key={idx}
+                  x1={`${p1.x}%`}
+                  y1={`${p1.y}%`}
+                  x2={`${p2.x}%`}
+                  y2={`${p2.y}%`}
+                  stroke="currentColor"
+                  className={edge.type === "strong" ? (active ? "text-slate-400" : "text-slate-200") : (active ? "text-emerald-400" : "text-emerald-200")}
+                  strokeWidth={edge.type === "strong" ? 2.2 : 2.4}
+                  strokeDasharray={edge.type === "weak" ? "6 5" : "0"}
+                />
+              );
+            })}
+          </svg>
 
-  const edges = useMemo(() => dedupeEdges(submissions), [submissions]);
-  const adjacency = useMemo(() => buildAdjacency(edges, mode), [edges, mode]);
-  const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
-  const bridgeScores = useMemo(() => computeBridgeScore(edges), [edges]);
-  const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
-  const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
-  const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0];
-  const selectedSubmission = submissions[selectedStudent.id];
-  const completionCount = Object.keys(submissions).length;
-  const completionRate = Math.round((completionCount / students.length) * 100);
+          {students.map((student) => {
+            const p = positionMap[student.id];
+            const selected = selectedId === student.id;
+            const active = activeIds.has(student.id);
+            const isStart = startId === student.id;
+            const bridge = bridgeScores[student.id] >= 3;
+            return (
+              <button
+                key={student.id}
+                onClick={() => onSelect(student.id)}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
+                style={{ left: `${p.x}%`, top: `${p.y}%`, minWidth: 72 }}
+              >
+                <div className="truncate">{student.label}</div>
+                <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : bridge ? "橋樑位" : ""}</div>
+              </button>
+            );
+          })}
 
-  const topBridges = [...students]
-    .sort((a, b) => bridgeScores[b.id] - bridgeScores[a.id])
-    .slice(0, 5);
-
-  function toggleStrong(id) {
-    setStrongSelections((prev) => {
-      if (prev.includes(id)) return prev.filter((item) => item !== id);
-      if (prev.length >= 3) return [...prev.slice(1), id];
-      return [...prev, id];
-    });
-  }
-
-  function toggleWeak(id) {
-    setWeakSelections((prev) => {
-      if (prev.includes(id)) return prev.filter((item) => item !== id);
-      if (prev.length >= 2) return [...prev.slice(1), id];
-      return [...prev, id];
-    });
-  }
-
-  function submitOwnNetwork() {
-    const sourceId = Number(selectedStudentId);
-    if (strongSelections.length !== 3 || weakSelections.length !== 2) return;
-    setSubmissions((prev) => ({
-      ...prev,
-      [sourceId]: {
-        strong: strongSelections.map(Number),
-        weak: weakSelections.map(Number),
-      },
-    }));
-    setViewStudentId(sourceId);
-  }
-
-  function resetPropagation() {
-    setStep(999);
-  }
-
-  function playPropagation() {
-    setStep(1);
-  }
-
-  function advancePropagation() {
-    setStep((prev) => {
-      if (prev >= traversal.order.length) return prev;
-      return prev + 1;
-    });
-  }
-
-  const studentOptions = students.map((student) => ({ value: String(student.id), label: student.label }));
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
-          <Card className="overflow-hidden">
-            <CardContent className="p-8">
-              <div className="flex flex-wrap items-center gap-3">
-                <Badge dark>全班社會網絡實驗</Badge>
-                <Badge>3 個強連結 × 2 個弱連結 × 訊息擴散</Badge>
-              </div>
-              <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">從同學名單生成班級網絡</h1>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
-                學生先選自己的名字，再指出 3 位強連結，以及 2 位最近有講過話、但不屬於自己朋友圈的弱連結。系統會依據全班資料建立社會網絡，並讓教師指定任一位同學作為訊息起點，觀察訊息如何沿著不同連結傳遞出去。
-              </p>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Card><CardContent><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></CardContent></Card>
-                <Card><CardContent><div className="text-sm text-slate-500">已提交連結</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">目前為前端示範資料</div></CardContent></Card>
-                <Card><CardContent><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><ProgressBar value={completionRate} /></div></CardContent></Card>
-                <Card><CardContent><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold">{students.find((s) => s.id === startId)?.label}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></CardContent></Card>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Target className="h-5 w-5" />課堂流程</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm leading-7 text-slate-600">
-              {[
-                "學生進入網頁後，先從筆劃排序名單中選自己的名字。",
-                "每人勾選 3 位強連結，代表最穩定、最常互動的同學。",
-                "再指定 2 位弱連結，代表最近講過話，但不屬於原朋友圈的同學。",
-                "全班資料送出後，系統生成班級網絡，並自動標示可能的橋樑者。",
-                "教師選一位起始同學，觀察訊息如何擴散、在哪裡卡住、哪些弱連結打開了新圈層。",
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-2"><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" /><span>{item}</span></div>
-              ))}
-              <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
-                注意：名單中有兩位同名「李書緯」，此版本暫以 A、B 區分。正式上課建議再加學號或座號。
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-          <Card>
-            <CardHeader className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle className="flex items-center gap-2 text-2xl"><Radio className="h-5 w-5" />班級網絡圖</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <PrimaryButton active={mode === "all"} onClick={() => setMode("all")}>全部連結</PrimaryButton>
-                  <PrimaryButton active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</PrimaryButton>
-                  <PrimaryButton active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</PrimaryButton>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <NetworkGraph
-                edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
-                activeIds={activeIds}
-                selectedId={viewStudentId}
-                onSelect={setViewStudentId}
-                startId={startId}
-                bridgeScores={bridgeScores}
-              />
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />學生填答區</CardTitle></CardHeader>
-              <CardContent className="space-y-5">
-                <div>
-                  <div className="mb-2 text-sm text-slate-500">1. 選自己的名字</div>
-                  <SelectField value={selectedStudentId} onChange={setSelectedStudentId} options={studentOptions} />
-                </div>
-
-                <div>
-                  <div className="mb-2 text-sm text-slate-500">2. 指出 3 位強連結</div>
-                  <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
-                    {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
-                      <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                        <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
-                        <span className="text-sm">{student.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="mb-2 text-sm text-slate-500">3. 指出 2 位弱連結</div>
-                  <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
-                    {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
-                      <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                        <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
-                        <span className="text-sm">{student.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <PrimaryButton className="w-full" active onClick={submitOwnNetwork}>送出我的網絡</PrimaryButton>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Send className="h-5 w-5" />訊息傳播控制台</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="mb-2 text-sm text-slate-500">起始同學</div>
-                  <SelectField value={String(startId)} onChange={(v) => { setStartId(Number(v)); setStep(999); }} options={studentOptions} />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <PrimaryButton onClick={playPropagation}><Play className="mr-2 h-4 w-4" />開始</PrimaryButton>
-                  <PrimaryButton onClick={advancePropagation}>下一步</PrimaryButton>
-                  <PrimaryButton onClick={resetPropagation}><RotateCcw className="mr-2 h-4 w-4" />全部顯示</PrimaryButton>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <div className="font-medium text-slate-900">目前觀察</div>
-                  <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
-                  <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
-                  <div className="mt-1">傳播順序：{shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}{shownOrder.length > 8 ? " …" : ""}</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5" />角色解讀</CardTitle></CardHeader>
-              <CardContent className="space-y-4 text-sm leading-7 text-slate-600">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <div className="text-lg font-semibold text-slate-900">{selectedStudent.label}</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge>強連結 {selectedSubmission?.strong?.length || 0} 人</Badge>
-                    <Badge>弱連結 {selectedSubmission?.weak?.length || 0} 人</Badge>
-                    <Badge dark>橋樑分數 {bridgeScores[selectedStudent.id]}</Badge>
-                  </div>
-                  <div className="mt-3 text-slate-600">
-                    {bridgeScores[selectedStudent.id] >= 3
-                      ? "這位同學在多個弱連結中被指向，可能是跨圈層的重要橋樑。"
-                      : bridgeScores[selectedStudent.id] >= 1
-                        ? "這位同學至少連到弱連結，可能成為訊息跳出原圈層的出口。"
-                        : "這位同學目前主要在穩定的小圈圈內活動，較像強連結網絡中的成員。"}
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <div className="font-medium text-slate-900">最值得觀察的橋樑者</div>
-                  <div className="mt-2 space-y-2">
-                    {topBridges.map((student) => (
-                      <div key={student.id} className="flex items-center justify-between"><span>{student.label}</span><span className="text-slate-500">橋樑分數 {bridgeScores[student.id]}</span></div>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-slate-900 p-4 text-white">
-                  <div className="flex items-center gap-2 font-medium"><GitBranch className="h-4 w-4" />一句話帶走</div>
-                  <div className="mt-1 text-white/80">訊息不一定沿著最熟的關係走得最遠；很多時候，真正打開新圈層的，是那兩條看起來不起眼的弱連結。</div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="absolute bottom-4 left-4 rounded-2xl bg-white/95 px-4 py-3 shadow-sm ring-1 ring-slate-200">
+            <div className="text-xs text-slate-500">圖例</div>
+            <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-700">
+              <span>— 強連結</span>
+              <span className="text-emerald-600">- - 弱連結</span>
+              <span>綠色節點＝已收到訊息</span>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      );
+    }
+
+    function App() {
+      const [selectedStudentId, setSelectedStudentId] = useState(String(students[0].id));
+      const [strongSelections, setStrongSelections] = useState([String(students[1].id), String(students[4].id), String(students[7].id)]);
+      const [weakSelections, setWeakSelections] = useState([String(students[17].id), String(students[25].id)]);
+      const [submissions, setSubmissions] = useState(seedSubmissions);
+      const [viewStudentId, setViewStudentId] = useState(1);
+      const [startId, setStartId] = useState(1);
+      const [mode, setMode] = useState("all");
+      const [step, setStep] = useState(999);
+
+      const edges = useMemo(() => dedupeEdges(submissions), [submissions]);
+      const adjacency = useMemo(() => buildAdjacency(edges, mode), [edges, mode]);
+      const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
+      const bridgeScores = useMemo(() => computeBridgeScore(edges), [edges]);
+      const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
+      const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
+      const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0];
+      const selectedSubmission = submissions[selectedStudent.id];
+      const completionCount = Object.keys(submissions).length;
+      const completionRate = Math.round((completionCount / students.length) * 100);
+
+      const topBridges = [...students]
+        .sort((a, b) => bridgeScores[b.id] - bridgeScores[a.id])
+        .slice(0, 5);
+
+      function toggleStrong(id) {
+        setStrongSelections((prev) => {
+          if (prev.includes(id)) return prev.filter((item) => item !== id);
+          if (prev.length >= 3) return [...prev.slice(1), id];
+          return [...prev, id];
+        });
+      }
+
+      function toggleWeak(id) {
+        setWeakSelections((prev) => {
+          if (prev.includes(id)) return prev.filter((item) => item !== id);
+          if (prev.length >= 2) return [...prev.slice(1), id];
+          return [...prev, id];
+        });
+      }
+
+      function submitOwnNetwork() {
+        const sourceId = Number(selectedStudentId);
+        if (strongSelections.length !== 3 || weakSelections.length !== 2) {
+          alert("請選滿 3 位強連結與 2 位弱連結");
+          return;
+        }
+        setSubmissions((prev) => ({
+          ...prev,
+          [sourceId]: {
+            strong: strongSelections.map(Number),
+            weak: weakSelections.map(Number),
+          },
+        }));
+        setViewStudentId(sourceId);
+      }
+
+      function resetPropagation() {
+        setStep(999);
+      }
+
+      function playPropagation() {
+        setStep(1);
+      }
+
+      function advancePropagation() {
+        setStep((prev) => {
+          if (prev >= traversal.order.length) return prev;
+          return prev + 1;
+        });
+      }
+
+      return (
+        <div className="min-h-screen bg-slate-50 text-slate-900">
+          <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+            <div className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
+              <Card className="overflow-hidden">
+                <div className="p-8">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge dark>全班社會網絡實驗</Badge>
+                    <Badge>3 個強連結 × 2 個弱連結 × 訊息擴散</Badge>
+                  </div>
+                  <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">從同學名單生成班級網絡</h1>
+                  <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
+                    學生先選自己的名字，再指出 3 位強連結，以及 2 位最近有講過話、但不屬於自己朋友圈的弱連結。系統會依據全班資料建立社會網絡，並讓教師指定任一位同學作為訊息起點，觀察訊息如何沿著不同連結傳遞出去。
+                  </p>
+
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></div></Card>
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">已提交連結</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">目前為前端示範資料</div></div></Card>
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><ProgressBar value={completionRate} /></div></div></Card>
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold break-words">{students.find((s) => s.id === startId)?.label}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></div></Card>
+                  </div>
+                </div>
+              </Card>
+
+              <Card>
+                <div className="p-6">
+                  <div className="text-xl font-semibold text-slate-900">課堂流程</div>
+                  <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                    {[
+                      "學生進入網頁後，先從筆劃排序名單中選自己的名字。",
+                      "每人勾選 3 位強連結，代表最穩定、最常互動的同學。",
+                      "再指定 2 位弱連結，代表最近講過話，但不屬於原朋友圈的同學。",
+                      "全班資料送出後，系統生成班級網絡，並自動標示可能的橋樑者。",
+                      "教師選一位起始同學，觀察訊息如何擴散、在哪裡卡住、哪些弱連結打開了新圈層。",
+                    ].map((item) => (
+                      <div key={item} className="flex items-start gap-2"><span className="mt-1 text-slate-400">→</span><span>{item}</span></div>
+                    ))}
+                    <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
+                      注意：名單中有兩位同名「李書緯」，此版本暫以 A、B 區分。正式上課建議再加學號或座號。
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+              <Card>
+                <div className="p-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button active={mode === "all"} onClick={() => setMode("all")}>全部連結</Button>
+                      <Button active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</Button>
+                      <Button active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 pt-0">
+                  <NetworkGraph
+                    edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
+                    activeIds={activeIds}
+                    selectedId={viewStudentId}
+                    onSelect={setViewStudentId}
+                    startId={startId}
+                    bridgeScores={bridgeScores}
+                  />
+                </div>
+              </Card>
+
+              <div className="grid gap-6">
+                <Card>
+                  <div className="p-6">
+                    <div className="text-xl font-semibold text-slate-900">學生填答區</div>
+                    <div className="mt-5 space-y-5">
+                      <div>
+                        <div className="mb-2 text-sm text-slate-500">1. 選自己的名字</div>
+                        <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+                          {students.map((student) => (
+                            <option key={student.id} value={String(student.id)}>{student.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 text-sm text-slate-500">2. 指出 3 位強連結</div>
+                        <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                          {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
+                            <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
+                              <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
+                              <span className="text-sm">{student.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 text-sm text-slate-500">3. 指出 2 位弱連結</div>
+                        <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                          {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
+                            <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
+                              <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
+                              <span className="text-sm">{student.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出我的網絡</Button>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="p-6">
+                    <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <div className="mb-2 text-sm text-slate-500">起始同學</div>
+                        <select value={String(startId)} onChange={(e) => { setStartId(Number(e.target.value)); setStep(999); }} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+                          {students.map((student) => (
+                            <option key={student.id} value={String(student.id)}>{student.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button onClick={playPropagation}>開始</Button>
+                        <Button onClick={advancePropagation}>下一步</Button>
+                        <Button onClick={resetPropagation}>全部顯示</Button>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                        <div className="font-medium text-slate-900">目前觀察</div>
+                        <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
+                        <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
+                        <div className="mt-1 break-words">傳播順序：{shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}{shownOrder.length > 8 ? " …" : ""}</div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="p-6">
+                    <div className="text-xl font-semibold text-slate-900">角色解讀</div>
+                    <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <div className="text-lg font-semibold text-slate-900">{selectedStudent.label}</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge>強連結 {selectedSubmission?.strong?.length || 0} 人</Badge>
+                          <Badge>弱連結 {selectedSubmission?.weak?.length || 0} 人</Badge>
+                          <Badge dark={true}>橋樑分數 {bridgeScores[selectedStudent.id]}</Badge>
+                        </div>
+                        <div className="mt-3 text-slate-600">
+                          {bridgeScores[selectedStudent.id] >= 3
+                            ? "這位同學在多個弱連結中被指向，可能是跨圈層的重要橋樑。"
+                            : bridgeScores[selectedStudent.id] >= 1
+                              ? "這位同學至少連到弱連結，可能成為訊息跳出原圈層的出口。"
+                              : "這位同學目前主要在穩定的小圈圈內活動，較像強連結網絡中的成員。"}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="font-medium text-slate-900">最值得觀察的橋樑者</div>
+                        <div className="mt-2 space-y-2">
+                          {topBridges.map((student) => (
+                            <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">橋樑分數 {bridgeScores[student.id]}</span></div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900 p-4 text-white">
+                        <div className="font-medium">一句話帶走</div>
+                        <div className="mt-1 text-white/80">訊息不一定沿著最熟的關係走得最遠；很多時候，真正打開新圈層的，是那兩條看起來不起眼的弱連結。</div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
