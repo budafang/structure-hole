@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>結構洞班級網絡實驗</title>
+  <title>班級社會網絡結構｜正式課堂版</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     body { font-family: Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
-    select, button, input { outline: none; }
+    select, button, input, textarea { outline: none; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -19,73 +19,123 @@
   <script type="text/babel">
     const { useMemo, useState } = React;
 
-    const rawRoster = [
-      "詹雁婷", "黃家柔", "姚宇倢", "王瑜凡", "謝絲語", "劉亭瑜", "簡佑軒", "李章鴻", "黃涵溱", "蘇琇萍",
-      "謝函妤", "葉珈伶", "鄭皓勻", "林芸葶", "黃思媛", "粘凱柔", "張詠淇", "張恩臨", "陳馨美", "王晨庭",
-      "陳楷鈞", "郭品涵", "鍾宥嫀", "施沛宇", "王廷睿", "陳思嫺", "徐靖晴", "陳筠蓁", "鍾秉諺", "林敬倫",
-      "陳思澔", "徐翊薰", "林采萱", "岑子薰", "黎佩彤", "熊苡寧", "羅宇宣", "黃千芳", "吳宜錚", "陳玟媛",
-      "蔡淳璿", "莊晴閔", "林依璇", "鄧芷安", "鄧修源", "林宸安", "向文軒", "邱顗帆", "張馨慈", "林佳穎",
-      "李杰紘", "趙芷宜", "陳齊寧", "梅若婕", "劉禹彤", "劉郁鈺", "何欣嬡", "陳照恩", "許芙瑄", "鄭恩伃",
-      "房怡杉", "范瑞麟", "卓聿澤", "顏祥恩", "朱紘緯", "王瑜偵", "李書緯", "陳姮伃", "凌婧綸", "黃芝茜",
-      "劉思晴", "白宸瑜", "李書緯", "鄭孚玉", "朱翊安", "趙佑昕"
-    ];
+    const defaultRosterText = `詹雁婷
+黃家柔
+姚宇倢
+王瑜凡
+謝絲語
+劉亭瑜
+簡佑軒
+李章鴻
+黃涵溱
+蘇琇萍
+謝函妤
+葉珈伶
+鄭皓勻
+林芸葶
+黃思媛
+粘凱柔
+張詠淇
+張恩臨
+陳馨美
+王晨庭
+陳楷鈞
+郭品涵
+鍾宥嫀
+施沛宇
+王廷睿
+陳思嫺
+徐靖晴
+陳筠蓁
+鍾秉諺
+林敬倫
+陳思澔
+徐翊薰
+林采萱
+岑子薰
+黎佩彤
+熊苡寧
+羅宇宣
+黃千芳
+吳宜錚
+陳玟媛
+蔡淳璿
+莊晴閔
+林依璇
+鄧芷安
+鄧修源
+林宸安
+向文軒
+邱顗帆
+張馨慈
+林佳穎
+李杰紘
+趙芷宜
+陳齊寧
+梅若婕
+劉禹彤
+劉郁鈺
+何欣嬡
+陳照恩
+許芙瑄
+鄭恩伃
+房怡杉
+范瑞麟
+卓聿澤
+顏祥恩
+朱紘緯
+王瑜偵
+李書緯
+陳姮伃
+凌婧綸
+黃芝茜
+劉思晴
+白宸瑜
+李書緯
+鄭孚玉
+朱翊安
+趙佑昕`;
 
     const strokeCollator = new Intl.Collator("zh-Hant-u-co-stroke");
-    const duplicateCount = rawRoster.reduce((acc, name) => {
-      acc[name] = (acc[name] || 0) + 1;
-      return acc;
-    }, {});
-    const seenDuplicate = {};
 
-    const students = [...rawRoster]
-      .sort((a, b) => strokeCollator.compare(a, b))
-      .map((name, index) => {
-        if (duplicateCount[name] > 1) {
-          seenDuplicate[name] = (seenDuplicate[name] || 0) + 1;
-        }
-        const suffix = duplicateCount[name] > 1 ? `（${String.fromCharCode(64 + seenDuplicate[name])}）` : "";
-        return {
-          id: index + 1,
-          name,
-          label: `${name}${suffix}`,
-        };
-      });
+    function parseRoster(text) {
+      const rawRoster = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
 
-    function createSeedSubmissions(list) {
-      const total = list.length;
-      const result = {};
-      list.forEach((student) => {
-        const id = student.id;
-        const strong = [
-          ((id + 0) % total) + 1,
-          ((id + 5) % total) + 1,
-          ((id + 11) % total) + 1,
-        ]
-          .filter((target, idx, arr) => target !== id && arr.indexOf(target) === idx)
-          .slice(0, 3);
-        const weak = [
-          ((id + 17) % total) + 1,
-          ((id + 29) % total) + 1,
-        ]
-          .filter((target, idx, arr) => target !== id && !strong.includes(target) && arr.indexOf(target) === idx)
-          .slice(0, 2);
-        result[id] = { strong, weak };
-      });
-      return result;
+      const duplicateCount = rawRoster.reduce((acc, name) => {
+        acc[name] = (acc[name] || 0) + 1;
+        return acc;
+      }, {});
+      const seenDuplicate = {};
+
+      return [...rawRoster]
+        .sort((a, b) => strokeCollator.compare(a, b))
+        .map((name, index) => {
+          if (duplicateCount[name] > 1) {
+            seenDuplicate[name] = (seenDuplicate[name] || 0) + 1;
+          }
+          const suffix = duplicateCount[name] > 1 ? `（${String.fromCharCode(64 + seenDuplicate[name])}）` : "";
+          return {
+            id: index + 1,
+            name,
+            label: `${name}${suffix}`,
+          };
+        });
     }
 
-    const seedSubmissions = createSeedSubmissions(students);
-
-    const polar = students.map((student, index) => {
-      const total = students.length;
-      const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
-      const ring = index < 38 ? 34 : 22;
-      const x = 50 + Math.cos(angle) * (ring + (index % 3) * 4);
-      const y = 50 + Math.sin(angle) * (ring + (index % 3) * 4);
-      return { id: student.id, x, y };
-    });
-
-    const positionMap = Object.fromEntries(polar.map((p) => [p.id, p]));
+    function buildPositions(students) {
+      const polar = students.map((student, index) => {
+        const total = students.length;
+        const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
+        const ring = index < Math.ceil(total / 2) ? 34 : 22;
+        const x = 50 + Math.cos(angle) * (ring + (index % 3) * 4);
+        const y = 50 + Math.sin(angle) * (ring + (index % 3) * 4);
+        return { id: student.id, x, y };
+      });
+      return Object.fromEntries(polar.map((p) => [p.id, p]));
+    }
 
     function dedupeEdges(submissions) {
       const map = new Map();
@@ -106,7 +156,7 @@
       return Array.from(map.values());
     }
 
-    function buildAdjacency(edges, mode) {
+    function buildAdjacency(students, edges, mode) {
       const adjacency = {};
       students.forEach((s) => {
         adjacency[s.id] = [];
@@ -121,7 +171,7 @@
     }
 
     function bfs(startId, adjacency) {
-      if (!startId) return { order: [], distance: {}, parent: {} };
+      if (!startId || !adjacency[startId]) return { order: [], distance: {}, parent: {} };
       const visited = new Set([startId]);
       const distance = { [startId]: 0 };
       const parent = {};
@@ -145,7 +195,7 @@
       return { order, distance, parent };
     }
 
-    function computeBridgeScore(edges) {
+    function computeBridgeScore(students, edges) {
       const counts = {};
       students.forEach((s) => {
         counts[s.id] = 0;
@@ -155,6 +205,18 @@
           counts[edge.source] += 1;
           counts[edge.target] += 1;
         }
+      });
+      return counts;
+    }
+
+    function computePopularityScore(students, edges) {
+      const counts = {};
+      students.forEach((s) => {
+        counts[s.id] = 0;
+      });
+      edges.forEach((edge) => {
+        counts[edge.source] += 1;
+        counts[edge.target] += 1;
       });
       return counts;
     }
@@ -171,11 +233,12 @@
       );
     }
 
-    function Button({ children, onClick, active = false, className = "" }) {
+    function Button({ children, onClick, active = false, className = "", disabled = false }) {
       return (
         <button
           onClick={onClick}
-          className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${className}`}
+          disabled={disabled}
+          className={`inline-flex items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-medium transition ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50"} ${disabled ? "cursor-not-allowed opacity-50" : ""} ${className}`}
         >
           {children}
         </button>
@@ -190,13 +253,13 @@
       );
     }
 
-    function NetworkGraph({ edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
+    function NetworkGraph({ students, positions, edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
       return (
         <div className="relative h-[680px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
           <svg className="absolute inset-0 h-full w-full">
             {edges.map((edge, idx) => {
-              const p1 = positionMap[edge.source];
-              const p2 = positionMap[edge.target];
+              const p1 = positions[edge.source];
+              const p2 = positions[edge.target];
               const active = activeIds.has(edge.source) && activeIds.has(edge.target);
               return (
                 <line
@@ -215,11 +278,11 @@
           </svg>
 
           {students.map((student) => {
-            const p = positionMap[student.id];
+            const p = positions[student.id];
             const selected = selectedId === student.id;
             const active = activeIds.has(student.id);
             const isStart = startId === student.id;
-            const bridge = bridgeScores[student.id] >= 3;
+            const bridge = (bridgeScores[student.id] || 0) >= 3;
             return (
               <button
                 key={student.id}
@@ -246,29 +309,55 @@
     }
 
     function App() {
-      const [selectedStudentId, setSelectedStudentId] = useState(String(students[0].id));
-      const [strongSelections, setStrongSelections] = useState([String(students[1].id), String(students[4].id), String(students[7].id)]);
-      const [weakSelections, setWeakSelections] = useState([String(students[17].id), String(students[25].id)]);
-      const [submissions, setSubmissions] = useState(seedSubmissions);
+      const [rosterText, setRosterText] = useState(defaultRosterText);
+      const [students, setStudents] = useState(() => parseRoster(defaultRosterText));
+      const [selectedStudentId, setSelectedStudentId] = useState("1");
+      const [strongSelections, setStrongSelections] = useState([]);
+      const [weakSelections, setWeakSelections] = useState([]);
+      const [submissions, setSubmissions] = useState({});
       const [viewStudentId, setViewStudentId] = useState(1);
       const [startId, setStartId] = useState(1);
       const [mode, setMode] = useState("all");
       const [step, setStep] = useState(999);
 
+      const positions = useMemo(() => buildPositions(students), [students]);
       const edges = useMemo(() => dedupeEdges(submissions), [submissions]);
-      const adjacency = useMemo(() => buildAdjacency(edges, mode), [edges, mode]);
+      const adjacency = useMemo(() => buildAdjacency(students, edges, mode), [students, edges, mode]);
       const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
-      const bridgeScores = useMemo(() => computeBridgeScore(edges), [edges]);
+      const bridgeScores = useMemo(() => computeBridgeScore(students, edges), [students, edges]);
+      const popularityScores = useMemo(() => computePopularityScore(students, edges), [students, edges]);
       const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
       const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
-      const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0];
-      const selectedSubmission = submissions[selectedStudent.id];
+      const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0] || { id: 1, label: "", name: "" };
+      const selectedSubmission = submissions[selectedStudent.id] || { strong: [], weak: [] };
       const completionCount = Object.keys(submissions).length;
-      const completionRate = Math.round((completionCount / students.length) * 100);
+      const completionRate = students.length ? Math.round((completionCount / students.length) * 100) : 0;
 
       const topBridges = [...students]
-        .sort((a, b) => bridgeScores[b.id] - bridgeScores[a.id])
+        .filter((student) => (bridgeScores[student.id] || 0) > 0)
+        .sort((a, b) => (bridgeScores[b.id] || 0) - (bridgeScores[a.id] || 0))
         .slice(0, 5);
+
+      const topPopularity = [...students]
+        .filter((student) => (popularityScores[student.id] || 0) > 0)
+        .sort((a, b) => (popularityScores[b.id] || 0) - (popularityScores[a.id] || 0))
+        .slice(0, 5);
+
+      function rebuildClass() {
+        const parsed = parseRoster(rosterText);
+        if (!parsed.length) {
+          alert("請先貼上至少一位學生姓名");
+          return;
+        }
+        setStudents(parsed);
+        setSubmissions({});
+        setSelectedStudentId(String(parsed[0].id));
+        setViewStudentId(parsed[0].id);
+        setStartId(parsed[0].id);
+        setStrongSelections([]);
+        setWeakSelections([]);
+        setStep(999);
+      }
 
       function toggleStrong(id) {
         setStrongSelections((prev) => {
@@ -320,42 +409,44 @@
       return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
           <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-            <div className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
+            <div className="mb-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
               <Card className="overflow-hidden">
                 <div className="p-8">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Badge dark>全班社會網絡實驗</Badge>
-                    <Badge>3 個強連結 × 2 個弱連結 × 訊息擴散</Badge>
+                    <Badge dark={true}>正式課堂版</Badge>
+                    <Badge>先貼名單，再開始</Badge>
+                    <Badge>3 個強連結 × 2 個弱連結</Badge>
                   </div>
-                  <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">從同學名單生成班級網絡</h1>
+                  <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">班級社會網絡結構</h1>
                   <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
-                    學生先選自己的名字，再指出 3 位強連結，以及 2 位最近有講過話、但不屬於自己朋友圈的弱連結。系統會依據全班資料建立社會網絡，並讓教師指定任一位同學作為訊息起點，觀察訊息如何沿著不同連結傳遞出去。
+                    先手動貼上學生名單並建立班級，再讓學生各自送出 3 位強連結與 2 位弱連結。系統會逐步長出班級網絡，並提供橋樑分數與人氣王指標，協助你觀察誰是跨圈層中介者、誰是最多連結的核心人物。
                   </p>
 
                   <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <Card><div className="p-6"><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></div></Card>
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">已提交連結</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">目前為前端示範資料</div></div></Card>
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">已送出人數</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">由學生實際填答生成</div></div></Card>
                     <Card><div className="p-6"><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><ProgressBar value={completionRate} /></div></div></Card>
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold break-words">{students.find((s) => s.id === startId)?.label}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></div></Card>
+                    <Card><div className="p-6"><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold break-words">{students.find((s) => s.id === startId)?.label || "尚未建立"}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></div></Card>
                   </div>
                 </div>
               </Card>
 
               <Card>
                 <div className="p-6">
-                  <div className="text-xl font-semibold text-slate-900">課堂流程</div>
-                  <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                    {[
-                      "學生進入網頁後，先從筆劃排序名單中選自己的名字。",
-                      "每人勾選 3 位強連結，代表最穩定、最常互動的同學。",
-                      "再指定 2 位弱連結，代表最近講過話，但不屬於原朋友圈的同學。",
-                      "全班資料送出後，系統生成班級網絡，並自動標示可能的橋樑者。",
-                      "教師選一位起始同學，觀察訊息如何擴散、在哪裡卡住、哪些弱連結打開了新圈層。",
-                    ].map((item) => (
-                      <div key={item} className="flex items-start gap-2"><span className="mt-1 text-slate-400">→</span><span>{item}</span></div>
-                    ))}
+                  <div className="text-xl font-semibold text-slate-900">班級初始化</div>
+                  <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
+                    <div>先把學生名單一行一位貼到下面，再按「建立班級」。系統會依筆劃排序產生可選名單，並重置既有網絡資料。</div>
+                    <textarea
+                      value={rosterText}
+                      onChange={(e) => setRosterText(e.target.value)}
+                      className="h-56 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800"
+                      placeholder="一行一位學生姓名"
+                    />
+                    <div className="flex gap-3">
+                      <Button active={true} onClick={rebuildClass}>建立班級</Button>
+                    </div>
                     <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
-                      注意：名單中有兩位同名「李書緯」，此版本暫以 A、B 區分。正式上課建議再加學號或座號。
+                      注意：若有同名學生，系統會自動標成 A、B、C 以利辨識。若能加入學號或座號，辨識會更穩。
                     </div>
                   </div>
                 </div>
@@ -376,6 +467,8 @@
                 </div>
                 <div className="p-6 pt-0">
                   <NetworkGraph
+                    students={students}
+                    positions={positions}
                     edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
                     activeIds={activeIds}
                     selectedId={viewStudentId}
@@ -442,15 +535,15 @@
                         </select>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        <Button onClick={playPropagation}>開始</Button>
-                        <Button onClick={advancePropagation}>下一步</Button>
+                        <Button onClick={playPropagation} disabled={!edges.length}>開始</Button>
+                        <Button onClick={advancePropagation} disabled={!edges.length}>下一步</Button>
                         <Button onClick={resetPropagation}>全部顯示</Button>
                       </div>
                       <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                         <div className="font-medium text-slate-900">目前觀察</div>
                         <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
                         <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
-                        <div className="mt-1 break-words">傳播順序：{shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}{shownOrder.length > 8 ? " …" : ""}</div>
+                        <div className="mt-1 break-words">傳播順序：{shownOrder.length === 0 ? "尚未建立可傳播的網絡" : `${shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}${shownOrder.length > 8 ? " …" : ""}`}</div>
                       </div>
                     </div>
                   </div>
@@ -461,31 +554,51 @@
                     <div className="text-xl font-semibold text-slate-900">角色解讀</div>
                     <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
                       <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="text-lg font-semibold text-slate-900">{selectedStudent.label}</div>
+                        <div className="text-lg font-semibold text-slate-900">{selectedStudent.label || "尚未建立"}</div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge>強連結 {selectedSubmission?.strong?.length || 0} 人</Badge>
-                          <Badge>弱連結 {selectedSubmission?.weak?.length || 0} 人</Badge>
-                          <Badge dark={true}>橋樑分數 {bridgeScores[selectedStudent.id]}</Badge>
+                          <Badge>強連結 {selectedSubmission.strong.length} 人</Badge>
+                          <Badge>弱連結 {selectedSubmission.weak.length} 人</Badge>
+                          <Badge dark={true}>橋樑分數 {bridgeScores[selectedStudent.id] || 0}</Badge>
+                          <Badge>人氣王分數 {popularityScores[selectedStudent.id] || 0}</Badge>
                         </div>
                         <div className="mt-3 text-slate-600">
-                          {bridgeScores[selectedStudent.id] >= 3
+                          {(bridgeScores[selectedStudent.id] || 0) >= 3
                             ? "這位同學在多個弱連結中被指向，可能是跨圈層的重要橋樑。"
-                            : bridgeScores[selectedStudent.id] >= 1
-                              ? "這位同學至少連到弱連結，可能成為訊息跳出原圈層的出口。"
-                              : "這位同學目前主要在穩定的小圈圈內活動，較像強連結網絡中的成員。"}
+                            : (popularityScores[selectedStudent.id] || 0) >= 4
+                              ? "這位同學的總連結數偏高，較可能是班上的高能見度核心人物。"
+                              : "目前這位同學的網絡位置仍需要更多同學送出資料，才能更穩定判讀。"}
                         </div>
                       </div>
+
                       <div className="rounded-2xl bg-slate-50 p-4">
                         <div className="font-medium text-slate-900">最值得觀察的橋樑者</div>
                         <div className="mt-2 space-y-2">
-                          {topBridges.map((student) => (
-                            <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">橋樑分數 {bridgeScores[student.id]}</span></div>
-                          ))}
+                          {topBridges.length === 0 ? (
+                            <div className="text-slate-500">目前尚未有人送出弱連結資料。</div>
+                          ) : (
+                            topBridges.map((student) => (
+                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">橋樑分數 {bridgeScores[student.id] || 0}</span></div>
+                            ))
+                          )}
                         </div>
                       </div>
+
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="font-medium text-slate-900">人氣王排行榜</div>
+                        <div className="mt-2 space-y-2">
+                          {topPopularity.length === 0 ? (
+                            <div className="text-slate-500">目前尚未形成足夠連結。</div>
+                          ) : (
+                            topPopularity.map((student) => (
+                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">總連結數 {popularityScores[student.id] || 0}</span></div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
                       <div className="rounded-2xl bg-slate-900 p-4 text-white">
                         <div className="font-medium">一句話帶走</div>
-                        <div className="mt-1 text-white/80">訊息不一定沿著最熟的關係走得最遠；很多時候，真正打開新圈層的，是那兩條看起來不起眼的弱連結。</div>
+                        <div className="mt-1 text-white/80">橋樑分數看的是誰把不同圈層接起來；人氣王指標看的是誰與最多人相連。兩者不一定是同一個人。</div>
                       </div>
                     </div>
                   </div>
