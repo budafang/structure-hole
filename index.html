@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken }
 import { getFirestore, collection, doc, setDoc, onSnapshot, getDocs, writeBatch } from 'firebase/firestore';
 
 // ============================================================================
-// Firebase Initialization
+// Firebase Initialization (恢復為 Canvas 平台預設環境配置)
 // ============================================================================
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
@@ -68,13 +68,17 @@ export default function App() {
         }
       } catch (err) {
         console.error("Auth Error:", err);
-        showMessage("認證失敗，請重新整理網頁", "error");
+        showMessage("進入單機體驗模式 (雲端連線異常)", "error");
+        setAuthChecking(false); // 確保發生錯誤時，畫面也能正常顯示
       }
     };
     initAuth();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      setAuthChecking(false);
+    }, (error) => {
+      console.error("Auth State Error:", error);
       setAuthChecking(false);
     });
     return () => unsubscribe();
@@ -93,7 +97,7 @@ export default function App() {
       if (docSnap.exists()) {
         const list = docSnap.data().students || DEFAULT_CLASS_LIST;
         setClassList(list);
-        setTeacherInput(list.join(', ')); // 保持老師輸入框與雲端同步
+        setTeacherInput(list.join(', ')); 
       }
     }, (error) => console.error(error));
 
@@ -289,12 +293,17 @@ export default function App() {
   };
 
   const handleUpdateClassList = async () => {
-    if (!user) return;
     const names = teacherInput.split(/[\n,]+/).map(n => n.trim()).filter(n => n);
     const uniqueNames = [...new Set(names)];
     
     if (uniqueNames.length === 0) {
       showMessage("請輸入至少一位學生姓名", "error");
+      return;
+    }
+
+    if (!user) {
+      setClassList(uniqueNames);
+      showMessage("(單機模式) 名單已更新！請學生開始連線填寫。");
       return;
     }
 
@@ -309,7 +318,12 @@ export default function App() {
   };
 
   const handleClearConnections = async () => {
-    if(!user) return;
+    if (!user) {
+      setConnections({});
+      showMessage("(單機模式) 所有連線資料已清空");
+      return;
+    }
+
     try {
       const connectionsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'connections');
       const snapshot = await getDocs(connectionsCollectionRef);
@@ -326,7 +340,6 @@ export default function App() {
   };
 
   const handleStudentSubmit = async () => {
-    if (!user) return;
     if (!me) {
       showMessage("請選擇你是誰！", "error");
       return;
@@ -334,6 +347,15 @@ export default function App() {
     
     const strongTies = [...new Set([s1, s2].filter(n => n && n !== me))];
     const weakTies = [...new Set([w1].filter(n => n && n !== me && !strongTies.includes(n)))];
+
+    if (!user) {
+      setConnections(prev => ({
+        ...prev,
+        [me]: { strong: strongTies, weak: weakTies, timestamp: new Date().toISOString() }
+      }));
+      showMessage(`(單機模式) 提交成功！你已在網路上建立連結。`);
+      return;
+    }
 
     try {
       const myConnRef = doc(db, 'artifacts', appId, 'public', 'data', 'connections', me);
@@ -398,7 +420,7 @@ export default function App() {
   };
 
   // ============================================================================
-  // UI Render Helpers (重構為純函數，避免 Canvas 被強迫註銷)
+  // UI Render Helpers
   // ============================================================================
   
   const renderTeacherView = () => (
