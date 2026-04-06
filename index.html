@@ -125,28 +125,76 @@
         });
     }
 
-    function buildPositions(students) {
-      const polar = students.map((student, index) => {
-        const total = students.length;
-        const angle = (Math.PI * 2 * index) / total - Math.PI / 2;
-        const ring = index < Math.ceil(total / 2) ? 34 : 22;
-        const x = 50 + Math.cos(angle) * (ring + (index % 3) * 4);
-        const y = 50 + Math.sin(angle) * (ring + (index % 3) * 4);
-        return { id: student.id, x, y };
+    function buildPositions(students, edges, degreeCounts) {
+      if (!students.length) return {};
+      const adjacency = {};
+      students.forEach((s) => { adjacency[s.id] = new Set(); });
+      edges.forEach((edge) => {
+        adjacency[edge.source]?.add(edge.target);
+        adjacency[edge.target]?.add(edge.source);
       });
-      return Object.fromEntries(polar.map((p) => [p.id, p]));
+
+      const visited = new Set();
+      const components = [];
+      for (const s of students) {
+        if (visited.has(s.id)) continue;
+        const queue = [s.id];
+        visited.add(s.id);
+        const comp = [];
+        while (queue.length) {
+          const cur = queue.shift();
+          comp.push(cur);
+          for (const nb of adjacency[cur]) {
+            if (!visited.has(nb)) {
+              visited.add(nb);
+              queue.push(nb);
+            }
+          }
+        }
+        components.push(comp);
+      }
+
+      const total = components.length;
+      const centers = components.map((comp, idx) => {
+        const angle = (Math.PI * 2 * idx) / Math.max(total, 1) - Math.PI / 2;
+        const radius = total === 1 ? 0 : 26;
+        return {
+          x: 50 + Math.cos(angle) * radius,
+          y: 50 + Math.sin(angle) * radius,
+        };
+      });
+
+      const positions = {};
+      components.forEach((comp, compIndex) => {
+        const center = centers[compIndex];
+        const sorted = [...comp].sort((a, b) => (degreeCounts[b] || 0) - (degreeCounts[a] || 0));
+        const localMax = Math.max(...sorted.map((id) => degreeCounts[id] || 0), 1);
+
+        sorted.forEach((id, localIndex) => {
+          const score = degreeCounts[id] || 0;
+          const normalized = score / localMax;
+          const ring = localIndex === 0 ? 0 : 8 + Math.floor(localIndex / 6) * 7 + (1 - normalized) * 4;
+          const angle = localIndex === 0 ? 0 : (Math.PI * 2 * (localIndex - 1)) / Math.max(sorted.length - 1, 1);
+          positions[id] = {
+            x: center.x + Math.cos(angle) * ring,
+            y: center.y + Math.sin(angle) * ring,
+          };
+        });
+      });
+
+      return positions;
     }
 
     function dedupeEdges(submissions) {
       const map = new Map();
       Object.entries(submissions).forEach(([sourceId, links]) => {
-        links.strong.forEach((target) => {
+        (links.strong || []).forEach((target) => {
           const a = Number(sourceId);
           const b = Number(target);
           const key = [Math.min(a, b), Math.max(a, b), "strong"].join("-");
           map.set(key, { source: a, target: b, type: "strong" });
         });
-        links.weak.forEach((target) => {
+        (links.weak || []).forEach((target) => {
           const a = Number(sourceId);
           const b = Number(target);
           const key = [Math.min(a, b), Math.max(a, b), "weak"].join("-");
@@ -195,30 +243,90 @@
       return { order, distance, parent };
     }
 
-    function computeBridgeScore(students, edges) {
-      const counts = {};
-      students.forEach((s) => {
-        counts[s.id] = 0;
-      });
+    function computeDegreeMetrics(students, edges) {
+      const degree = {};
+      const normalized = {};
+      students.forEach((s) => { degree[s.id] = 0; });
       edges.forEach((edge) => {
-        if (edge.type === "weak") {
-          counts[edge.source] += 1;
-          counts[edge.target] += 1;
-        }
+        degree[edge.source] += 1;
+        degree[edge.target] += 1;
       });
-      return counts;
+      const n = students.length;
+      students.forEach((s) => {
+        normalized[s.id] = n > 1 ? degree[s.id] / (n - 1) : 0;
+      });
+      return { degree, normalized };
     }
 
-    function computePopularityScore(students, edges) {
-      const counts = {};
-      students.forEach((s) => {
-        counts[s.id] = 0;
-      });
+    function computeBetweennessCentrality(students, edges) {
+      const ids = students.map((s) => s.id);
+      const neighbors = {};
+      ids.forEach((id) => { neighbors[id] = []; });
       edges.forEach((edge) => {
-        counts[edge.source] += 1;
-        counts[edge.target] += 1;
+        neighbors[edge.source].push(edge.target);
+        neighbors[edge.target].push(edge.source);
       });
-      return counts;
+
+      const CB = {};
+      ids.forEach((id) => { CB[id] = 0; });
+
+      ids.forEach((s) => {
+        const S = [];
+        const P = {};
+        const sigma = {};
+        const dist = {};
+        ids.forEach((v) => {
+          P[v] = [];
+          sigma[v] = 0;
+          dist[v] = -1;
+        });
+        sigma[s] = 1;
+        dist[s] = 0;
+        const Q = [s];
+
+        while (Q.length) {
+          const v = Q.shift();
+          S.push(v);
+          neighbors[v].forEach((w) => {
+            if (dist[w] < 0) {
+              Q.push(w);
+              dist[w] = dist[v] + 1;
+            }
+            if (dist[w] === dist[v] + 1) {
+              sigma[w] += sigma[v];
+              P[w].push(v);
+            }
+          });
+        }
+
+        const delta = {};
+        ids.forEach((v) => { delta[v] = 0; });
+
+        while (S.length) {
+          const w = S.pop();
+          P[w].forEach((v) => {
+            if (sigma[w] !== 0) {
+              delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w]);
+            }
+          });
+          if (w !== s) {
+            CB[w] += delta[w];
+          }
+        }
+      });
+
+      ids.forEach((id) => {
+        CB[id] = CB[id] / 2;
+      });
+
+      const normalized = {};
+      const n = ids.length;
+      const denom = n > 2 ? ((n - 1) * (n - 2)) / 2 : 1;
+      ids.forEach((id) => {
+        normalized[id] = denom > 0 ? CB[id] / denom : 0;
+      });
+
+      return { raw: CB, normalized };
     }
 
     function Card({ children, className = "" }) {
@@ -253,13 +361,13 @@
       );
     }
 
-    function NetworkGraph({ students, positions, edges, activeIds, selectedId, onSelect, startId, bridgeScores }) {
+    function NetworkGraph({ students, positions, edges, activeIds, selectedId, onSelect, startId, betweennessRaw, degreeRaw }) {
       return (
-        <div className="relative h-[680px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
+        <div className="relative h-[720px] w-full overflow-hidden rounded-[28px] border border-slate-200 bg-white">
           <svg className="absolute inset-0 h-full w-full">
             {edges.map((edge, idx) => {
-              const p1 = positions[edge.source];
-              const p2 = positions[edge.target];
+              const p1 = positions[edge.source] || { x: 50, y: 50 };
+              const p2 = positions[edge.target] || { x: 50, y: 50 };
               const active = activeIds.has(edge.source) && activeIds.has(edge.target);
               return (
                 <line
@@ -278,20 +386,22 @@
           </svg>
 
           {students.map((student) => {
-            const p = positions[student.id];
+            const p = positions[student.id] || { x: 50, y: 50 };
             const selected = selectedId === student.id;
             const active = activeIds.has(student.id);
             const isStart = startId === student.id;
-            const bridge = (bridgeScores[student.id] || 0) >= 3;
+            const isBridge = (betweennessRaw[student.id] || 0) > 0;
+            const degree = degreeRaw[student.id] || 0;
+            const sizeClass = degree >= 6 ? "min-w-[92px]" : degree >= 3 ? "min-w-[80px]" : "min-w-[72px]";
             return (
               <button
                 key={student.id}
                 onClick={() => onSelect(student.id)}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
-                style={{ left: `${p.x}%`, top: `${p.y}%`, minWidth: 72 }}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-2 text-[11px] font-medium shadow-sm transition ${sizeClass} ${selected ? "border-slate-900 bg-slate-900 text-white" : active ? "border-emerald-500 bg-emerald-50 text-slate-900" : "border-slate-200 bg-white text-slate-700"}`}
+                style={{ left: `${p.x}%`, top: `${p.y}%` }}
               >
                 <div className="truncate">{student.label}</div>
-                <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : bridge ? "橋樑位" : ""}</div>
+                <div className="mt-1 text-[10px] opacity-80">{isStart ? "起點" : isBridge ? "橋樑位" : ""}</div>
               </button>
             );
           })}
@@ -302,10 +412,15 @@
               <span>— 強連結</span>
               <span className="text-emerald-600">- - 弱連結</span>
               <span>綠色節點＝已收到訊息</span>
+              <span>節點越大＝度中心性越高</span>
             </div>
           </div>
         </div>
       );
+    }
+
+    function fmt(num, digits = 3) {
+      return Number(num || 0).toFixed(digits);
     }
 
     function App() {
@@ -320,12 +435,12 @@
       const [mode, setMode] = useState("all");
       const [step, setStep] = useState(999);
 
-      const positions = useMemo(() => buildPositions(students), [students]);
       const edges = useMemo(() => dedupeEdges(submissions), [submissions]);
+      const degreeMetrics = useMemo(() => computeDegreeMetrics(students, edges), [students, edges]);
+      const betweennessMetrics = useMemo(() => computeBetweennessCentrality(students, edges), [students, edges]);
+      const positions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics]);
       const adjacency = useMemo(() => buildAdjacency(students, edges, mode), [students, edges, mode]);
       const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
-      const bridgeScores = useMemo(() => computeBridgeScore(students, edges), [students, edges]);
-      const popularityScores = useMemo(() => computePopularityScore(students, edges), [students, edges]);
       const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
       const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
       const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0] || { id: 1, label: "", name: "" };
@@ -333,14 +448,14 @@
       const completionCount = Object.keys(submissions).length;
       const completionRate = students.length ? Math.round((completionCount / students.length) * 100) : 0;
 
-      const topBridges = [...students]
-        .filter((student) => (bridgeScores[student.id] || 0) > 0)
-        .sort((a, b) => (bridgeScores[b.id] || 0) - (bridgeScores[a.id] || 0))
+      const topDegree = [...students]
+        .filter((student) => (degreeMetrics.degree[student.id] || 0) > 0)
+        .sort((a, b) => (degreeMetrics.degree[b.id] || 0) - (degreeMetrics.degree[a.id] || 0))
         .slice(0, 5);
 
-      const topPopularity = [...students]
-        .filter((student) => (popularityScores[student.id] || 0) > 0)
-        .sort((a, b) => (popularityScores[b.id] || 0) - (popularityScores[a.id] || 0))
+      const topBetweenness = [...students]
+        .filter((student) => (betweennessMetrics.raw[student.id] || 0) > 0)
+        .sort((a, b) => (betweennessMetrics.raw[b.id] || 0) - (betweennessMetrics.raw[a.id] || 0))
         .slice(0, 5);
 
       function rebuildClass() {
@@ -377,11 +492,21 @@
 
       function submitOwnNetwork() {
         const sourceId = Number(selectedStudentId);
-        eak: weakSelections.map(Number),
+        setSubmissions((prev) => ({
+          ...prev,
+          [sourceId]: {
+            strong: strongSelections.map(Number),
+            weak: weakSelections.map(Number),
           },
         }));
-        setViewStudentId(sourceIdstrong: strongSelections.map(Number),
-            weak: weakSelections.map(Number),  function playPropagation() {
+        setViewStudentId(sourceId);
+      }
+
+      function resetPropagation() {
+        setStep(999);
+      }
+
+      function playPropagation() {
         setStep(1);
       }
 
@@ -394,18 +519,18 @@
 
       return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
-          <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+          <div className="mx-auto max-w-[1650px] px-6 py-8 lg:px-10">
             <div className="mb-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
               <Card className="overflow-hidden">
                 <div className="p-8">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Badge dark={true}>正式課堂版</Badge>
+                    <Badge dark={true}>正式 SNA 指標版</Badge>
                     <Badge>先貼名單，再開始</Badge>
-                    <Badge>3 個強連結 × 2 個弱連結</Badge>
+                    <Badge>Degree + Betweenness</Badge>
                   </div>
                   <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">班級社會網絡結構</h1>
                   <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
-                    先手動貼上學生名單並建立班級，再讓學生各自送出 3 位強連結與 2 位弱連結。系統會逐步長出班級網絡，並提供橋樑分數與人氣王指標，協助你觀察誰是跨圈層中介者、誰是最多連結的核心人物。
+                    先手動貼上學生名單並建立班級，再讓學生各自送出最多 3 位強連結與最多 2 位弱連結。系統會逐步長出班級網絡，並以正式社會網絡分析算法計算度中心性與中介中心性。
                   </p>
 
                   <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -439,10 +564,10 @@
               </Card>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1.72fr_0.72fr]">
+            <div className="grid gap-6 xl:grid-cols-[1.78fr_0.68fr]">
               <Card>
                 <div className="p-6">
-                  <div cla<div className="grid gap-6 xl:grid-cols-[1.72fr_0.72fr]">">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
                     <div className="flex flex-wrap gap-2">
                       <Button active={mode === "all"} onClick={() => setMode("all")}>全部連結</Button>
@@ -460,7 +585,8 @@
                     selectedId={viewStudentId}
                     onSelect={setViewStudentId}
                     startId={startId}
-                    bridgeScores={bridgeScores}
+                    betweennessRaw={betweennessMetrics.raw}
+                    degreeRaw={degreeMetrics.degree}
                   />
                 </div>
               </Card>
@@ -481,7 +607,8 @@
 
                       <div>
                         <div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div>
-                        <div className="max-h-44 space-y-2 overflow-auto roun<div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div> {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
+                        <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                          {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
                             <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
                               <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
                               <span className="text-sm">{student.label}</span>
@@ -492,7 +619,7 @@
 
                       <div>
                         <div className="mb-2 text-sm text-slate-500">3. 指出最多 2 位弱連結</div>
-                        <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                        <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
                           {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
                             <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
                               <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
@@ -502,10 +629,14 @@
                         </div>
                       </div>
 
-                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出目前選擇</But
+                      <Button className="w-full" active={true} onClick={submitOwnNetwork}>送出目前選擇</Button>
                     </div>
                   </div>
-                         <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
+                </Card>
+
+                <Card>
+                  <div className="p-6">
+                    <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
                     <div className="mt-4 space-y-4">
                       <div>
                         <div className="mb-2 text-sm text-slate-500">起始同學</div>
@@ -532,46 +663,42 @@
 
                 <Card>
                   <div className="p-6">
-                    <div className="text-xl font-semibold text-slate-900">角色解讀</div>
+                    <div className="text-xl font-semibold text-slate-900">正式指標解讀</div>
                     <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
                       <div className="rounded-2xl border border-slate-200 p-4">
                         <div className="text-lg font-semibold text-slate-900">{selectedStudent.label || "尚未建立"}</div>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge>強連結 {selectedSubmission.strong.length} 人</Badge>
-                          <Badge>弱連結 {selectedSubmission.weak.length} 人</Badge>
-                          <Badge dark={true}>橋樑分數 {bridgeScores[selectedStudent.id] || 0}</Badge>
-                          <Badge>人氣王分數 {popularityScores[selectedStudent.id] || 0}</Badge>
+                          <Badge>度數 {degreeMetrics.degree[selectedStudent.id] || 0}</Badge>
+                          <Badge>度中心性 {fmt(degreeMetrics.normalized[selectedStudent.id])}</Badge>
+                          <Badge dark={true}>中介中心性 {fmt(betweennessMetrics.raw[selectedStudent.id])}</Badge>
+                          <Badge>標準化中介中心性 {fmt(betweennessMetrics.normalized[selectedStudent.id])}</Badge>
                         </div>
                         <div className="mt-3 text-slate-600">
-                          {(bridgeScores[selectedStudent.id] || 0) >= 3
-                            ? "這位同學在多個弱連結中被指向，可能是跨圈層的重要橋樑。"
-                            : (popularityScores[selectedStudent.id] || 0) >= 4
-                              ? "這位同學的總連結數偏高，較可能是班上的高能見度核心人物。"
-                              : "目前這位同學的網絡位置仍需要更多同學送出資料，才能更穩定判讀。"}
+                          度中心性反映這位同學直接連到多少人；中介中心性反映他在他人彼此最短路徑上充當中介的程度。
                         </div>
                       </div>
 
                       <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="font-medium text-slate-900">最值得觀察的橋樑者</div>
+                        <div className="font-medium text-slate-900">度中心性前五名</div>
                         <div className="mt-2 space-y-2">
-                          {topBridges.length === 0 ? (
-                            <div className="text-slate-500">目前尚未有人送出弱連結資料。</div>
+                          {topDegree.length === 0 ? (
+                            <div className="text-slate-500">目前尚未形成足夠連結。</div>
                           ) : (
-                            topBridges.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">橋樑分數 {bridgeScores[student.id] || 0}</span></div>
+                            topDegree.map((student) => (
+                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">度數 {degreeMetrics.degree[student.id]}｜中心性 {fmt(degreeMetrics.normalized[student.id])}</span></div>
                             ))
                           )}
                         </div>
                       </div>
 
                       <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="font-medium text-slate-900">人氣王排行榜</div>
+                        <div className="font-medium text-slate-900">中介中心性前五名</div>
                         <div className="mt-2 space-y-2">
-                          {topPopularity.length === 0 ? (
-                            <div className="text-slate-500">目前尚未形成足夠連結。</div>
+                          {topBetweenness.length === 0 ? (
+                            <div className="text-slate-500">目前尚未形成可計算的橋樑位置。</div>
                           ) : (
-                            topPopularity.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">總連結數 {popularityScores[student.id] || 0}</span></div>
+                            topBetweenness.map((student) => (
+                              <div key={student.id} className="flex items-center justify-between gap-4"><span>{student.label}</span><span className="text-slate-500">原始值 {fmt(betweennessMetrics.raw[student.id])}｜標準化 {fmt(betweennessMetrics.normalized[student.id])}</span></div>
                             ))
                           )}
                         </div>
@@ -579,7 +706,7 @@
 
                       <div className="rounded-2xl bg-slate-900 p-4 text-white">
                         <div className="font-medium">一句話帶走</div>
-                        <div className="mt-1 text-white/80">橋樑分數看的是誰把不同圈層接起來；人氣王指標看的是誰與最多人相連。兩者不一定是同一個人。</div>
+                        <div className="mt-1 text-white/80">度中心性高的人，不一定是中介中心性高的人。朋友很多的人，未必就是最能連接不同群體的人。</div>
                       </div>
                     </div>
                   </div>
