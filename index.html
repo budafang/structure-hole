@@ -42,9 +42,7 @@
     const db = firebase.firestore();
     try {
       firebase.analytics();
-    } catch (e) {
-      // analytics 在某些環境可能不可用，忽略即可
-    }
+    } catch (e) {}
 
     const CLASS_ID = "default";
 
@@ -320,8 +318,43 @@
     function buildPositions(students, edges, degreeCounts) {
       if (!students.length) return {};
 
+      // 初始無連結：改成分散式排法
+      if (!edges.length) {
+        const positions = {};
+        const count = students.length;
+
+        const cols = Math.ceil(Math.sqrt(count * 1.6));
+        const rows = Math.ceil(count / cols);
+
+        const left = 8;
+        const right = 92;
+        const top = 12;
+        const bottom = 88;
+
+        const xGap = cols > 1 ? (right - left) / (cols - 1) : 0;
+        const yGap = rows > 1 ? (bottom - top) / (rows - 1) : 0;
+
+        students.forEach((student, index) => {
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+
+          const offset = row % 2 === 0 ? 0 : xGap * 0.35;
+          const jitterX = ((index * 17) % 7 - 3) * 0.35;
+          const jitterY = ((index * 13) % 5 - 2) * 0.35;
+
+          positions[student.id] = {
+            x: Math.min(right, left + col * xGap + offset + jitterX),
+            y: Math.min(bottom, top + row * yGap + jitterY),
+          };
+        });
+
+        return positions;
+      }
+
+      // 有連結後：多中心群聚布局
       const adjacency = {};
       students.forEach((s) => { adjacency[s.id] = new Set(); });
+
       edges.forEach((edge) => {
         adjacency[edge.source]?.add(edge.target);
         adjacency[edge.target]?.add(edge.source);
@@ -372,6 +405,7 @@
           const normalized = score / localMax;
           const ring = localIndex === 0 ? 0 : 8 + Math.floor(localIndex / 6) * 7 + (1 - normalized) * 4;
           const angle = localIndex === 0 ? 0 : (Math.PI * 2 * (localIndex - 1)) / Math.max(sorted.length - 1, 1);
+
           positions[id] = {
             x: center.x + Math.cos(angle) * ring,
             y: center.y + Math.sin(angle) * ring,
@@ -541,7 +575,7 @@
       const edges = useMemo(() => dedupeEdges(submissions, labelToId), [submissions, labelToId]);
       const degreeMetrics = useMemo(() => computeDegreeMetrics(students, edges), [students, edges]);
       const betweennessMetrics = useMemo(() => computeBetweennessCentrality(students, edges), [students, edges]);
-      const positions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics]);
+      const positions = useMemo(() => buildPositions(students, edges, degreeMetrics.degree), [students, edges, degreeMetrics.degree]);
       const adjacency = useMemo(() => buildAdjacency(students, edges, mode), [students, edges, mode]);
       const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
       const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
@@ -626,7 +660,7 @@
           .set(payload, { merge: true });
 
         setViewStudentId(sourceId);
-        setSubmitMessage("已送出");
+        setSubmitMessage(`已送出：${student.label}`);
         setTimeout(() => setSubmitMessage(""), 2000);
       }
 
@@ -648,50 +682,6 @@
       return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
           <div className="mx-auto max-w-[1650px] px-6 py-8 lg:px-10">
-            <div className="mb-8 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-              <Card className="overflow-hidden">
-                <div className="p-8">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Badge dark={true}>正式 SNA 指標版</Badge>
-                    <Badge>Firebase 即時同步</Badge>
-                    <Badge>Degree + Betweenness</Badge>
-                  </div>
-                  <h1 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">班級社會網絡結構</h1>
-                  <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 lg:text-lg">
-                    先手動貼上學生名單並建立班級，再讓學生各自送出最多 3 位強連結與最多 2 位弱連結。系統會逐步長出班級網絡，並以正式社會網絡分析算法計算度中心性與中介中心性。
-                  </p>
-
-                  <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">班級人數</div><div className="mt-2 text-3xl font-semibold">{students.length}</div><div className="mt-1 text-sm text-slate-500">姓名依筆劃排序顯示</div></div></Card>
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">已送出人數</div><div className="mt-2 text-3xl font-semibold">{completionCount}</div><div className="mt-1 text-sm text-slate-500">由學生實際填答生成</div></div></Card>
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">完成率</div><div className="mt-2 text-3xl font-semibold">{completionRate}%</div><div className="mt-3"><ProgressBar value={completionRate} /></div></div></Card>
-                    <Card><div className="p-6"><div className="text-sm text-slate-500">目前起點</div><div className="mt-2 text-2xl font-semibold break-words">{students.find((s) => s.id === startId)?.label || "尚未建立"}</div><div className="mt-1 text-sm text-slate-500">可切換觀察不同同學</div></div></Card>
-                  </div>
-                </div>
-              </Card>
-
-              <Card>
-                <div className="p-6">
-                  <div className="text-xl font-semibold text-slate-900">班級初始化</div>
-                  <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
-                    <div>先把學生名單一行一位貼到下面，再按「建立班級」。系統會依筆劃排序產生可選名單，並重置既有網絡資料。</div>
-                    <textarea
-                      value={rosterText}
-                      onChange={(e) => setRosterText(e.target.value)}
-                      className="h-56 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-800"
-                      placeholder="一行一位學生姓名"
-                    />
-                    <div className="flex gap-3">
-                      <Button active={true} onClick={rebuildClass}>建立班級</Button>
-                    </div>
-                    <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
-                      注意：若有同名學生，系統會自動標成 A、B、C 以利辨識。若能加入學號或座號，辨識會更穩。
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
             <div className="grid gap-6 xl:grid-cols-[1.78fr_0.68fr]">
               <Card>
                 <div className="p-6">
