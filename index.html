@@ -968,247 +968,249 @@
       return (
         <div className="min-h-screen bg-slate-50 text-slate-900">
           <div className="mx-auto max-w-[1650px] px-6 py-8 lg:px-10">
-            <div className="grid gap-6 xl:grid-cols-[1.78fr_0.68fr]">
-              <Card>
+
+            <Card>
+              <div className="p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button active={mode === "all"} onClick={() => { setMode("all"); setRoundStep(999); }}>全部連結</Button>
+                    <Button active={mode === "strongOnly"} onClick={() => { setMode("strongOnly"); setRoundStep(999); }}>只看強連結</Button>
+                    <Button active={mode === "weakPriority"} onClick={() => { setMode("weakPriority"); setRoundStep(999); }}>弱連結優先</Button>
+                    <Button onClick={resetLayout}>重設節點位置</Button>
+                    <Button danger={true} onClick={clearAllNetworkData} disabled={isBusy}>清空全部連結資料</Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-6 pb-2">
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 leading-7">
+                  這個版本的傳播模擬改成「按輪次擴散」：第 0 輪是起點本人，第 1 輪是直接連結，第 2 輪是朋友的朋友。
+                  所以換不同起點時，覆蓋速度、平均距離、覆蓋 50%/80% 所需輪次，都會跟著改變。
+                </div>
+              </div>
+
+              <div className="p-6 pt-4">
+                <NetworkGraph
+                  students={students}
+                  positions={positions}
+                  edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
+                  activeIds={activeIds}
+                  selectedId={viewStudentId}
+                  onSelect={setViewStudentId}
+                  startId={startId}
+                  betweennessRaw={betweennessMetrics.raw}
+                  degreeRaw={degreeMetrics.degree}
+                  onMoveNode={handleMoveNode}
+                />
+              </div>
+            </Card>
+
+            <div className="mt-6 grid gap-6 xl:grid-cols-3">
+
+              <Card className="h-full">
                 <div className="p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button active={mode === "all"} onClick={() => { setMode("all"); setRoundStep(999); }}>全部連結</Button>
-                      <Button active={mode === "strongOnly"} onClick={() => { setMode("strongOnly"); setRoundStep(999); }}>只看強連結</Button>
-                      <Button active={mode === "weakPriority"} onClick={() => { setMode("weakPriority"); setRoundStep(999); }}>弱連結優先</Button>
-                      <Button onClick={resetLayout}>重設節點位置</Button>
-                      <Button danger={true} onClick={clearAllNetworkData} disabled={isBusy}>清空全部連結資料</Button>
-                    </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xl font-semibold text-slate-900">班級名單設定</div>
+                    <Button onClick={rebuildClass} disabled={isBusy}>重建班級名單</Button>
                   </div>
-                </div>
 
-                <div className="px-6 pb-2">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 leading-7">
-                    這個版本的傳播模擬改成「按輪次擴散」：第 0 輪是起點本人，第 1 輪是直接連結，第 2 輪是朋友的朋友。
-                    所以換不同起點時，覆蓋速度、平均距離、覆蓋 50%/80% 所需輪次，都會跟著改變。
+                  <div className="mt-4">
+                    <div className="mb-2 text-sm text-slate-500">學生名單（每行一位）</div>
+                    <textarea
+                      value={rosterText}
+                      onChange={(e) => setRosterText(e.target.value)}
+                      rows="12"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                    />
                   </div>
-                </div>
 
-                <div className="p-6 pt-4">
-                  <NetworkGraph
-                    students={students}
-                    positions={positions}
-                    edges={edges.filter((e) => !(mode === "strongOnly" && e.type === "weak"))}
-                    activeIds={activeIds}
-                    selectedId={viewStudentId}
-                    onSelect={setViewStudentId}
-                    startId={startId}
-                    betweennessRaw={betweennessMetrics.raw}
-                    degreeRaw={degreeMetrics.degree}
-                    onMoveNode={handleMoveNode}
-                  />
+                  <div className="mt-3 text-sm text-slate-500">
+                    重新建立名單時，會同步清除所有已送出的網絡連結資料。
+                  </div>
                 </div>
               </Card>
 
-              <div className="grid gap-6">
-                <Card>
-                  <div className="p-6">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xl font-semibold text-slate-900">班級名單設定</div>
-                      <Button onClick={rebuildClass} disabled={isBusy}>重建班級名單</Button>
+              <Card className="h-full">
+                <div className="p-6">
+                  <div className="text-xl font-semibold text-slate-900">學生填答區</div>
+                  <div className="mt-5 space-y-5">
+                    <div>
+                      <div className="mb-2 text-sm text-slate-500">1. 選自己的名字</div>
+                      <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+                        {students.map((student) => (
+                          <option key={student.id} value={String(student.id)}>{student.label}</option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="mt-4">
-                      <div className="mb-2 text-sm text-slate-500">學生名單（每行一位）</div>
-                      <textarea
-                        value={rosterText}
-                        onChange={(e) => setRosterText(e.target.value)}
-                        rows="10"
+                    <div>
+                      <div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div>
+                      <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                        {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
+                          <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
+                            <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
+                            <span className="text-sm">{student.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-2 text-sm text-slate-500">3. 指出最多 2 位弱連結</div>
+                      <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
+                        {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
+                          <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
+                            <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
+                            <span className="text-sm">{student.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Button className="w-full" active={true} onClick={submitOwnNetwork} disabled={isBusy}>送出目前選擇</Button>
+
+                    {submitMessage && (
+                      <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        {submitMessage}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="h-full">
+                <div className="p-6">
+                  <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <div className="mb-2 text-sm text-slate-500">起始同學</div>
+                      <select
+                        value={String(startId)}
+                        onChange={(e) => {
+                          setStartId(Number(e.target.value));
+                          setRoundStep(999);
+                        }}
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
-                      />
+                      >
+                        {students.map((student) => (
+                          <option key={student.id} value={String(student.id)}>{student.label}</option>
+                        ))}
+                      </select>
                     </div>
 
-                    <div className="mt-3 text-sm text-slate-500">
-                      重新建立名單時，會同步清除所有已送出的網絡連結資料。
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button onClick={playPropagation} disabled={!edges.length}>開始</Button>
+                      <Button onClick={advancePropagation} disabled={!edges.length}>下一輪</Button>
+                      <Button onClick={resetPropagation}>全部顯示</Button>
                     </div>
-                  </div>
-                </Card>
 
-                <Card>
-                  <div className="p-6">
-                    <div className="text-xl font-semibold text-slate-900">學生填答區</div>
-                    <div className="mt-5 space-y-5">
-                      <div>
-                        <div className="mb-2 text-sm text-slate-500">1. 選自己的名字</div>
-                        <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
-                          {students.map((student) => (
-                            <option key={student.id} value={String(student.id)}>{student.label}</option>
-                          ))}
-                        </select>
+                    <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                      <div className="font-medium text-slate-900">目前觀察</div>
+                      <div className="mt-1">目前輪次：第 {currentVisibleRound} 輪</div>
+                      <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
+                      <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
+                      <div className="mt-1">填答進度：{completionCount} / {students.length} 人（{completionRate}%）</div>
+                      <div className="mt-3"><ProgressBar value={completionRate} /></div>
+
+                      <div className="mt-4 break-words">
+                        本輪新增：{currentLayer.length ? currentLayer.map((id) => students.find((s) => s.id === id)?.label).filter(Boolean).join("、") : "尚無"}
                       </div>
 
-                      <div>
-                        <div className="mb-2 text-sm text-slate-500">2. 指出最多 3 位強連結</div>
-                        <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
-                          {students.filter((s) => String(s.id) !== selectedStudentId).map((student) => (
-                            <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                              <input type="checkbox" checked={strongSelections.includes(String(student.id))} onChange={() => toggleStrong(String(student.id))} className="h-4 w-4" />
-                              <span className="text-sm">{student.label}</span>
-                            </label>
-                          ))}
-                        </div>
+                      <div className="mt-3 break-words">
+                        目前累積覆蓋：{shownOrderLabels.length ? shownOrderLabels.slice(0, 12).join(" → ") + (shownOrderLabels.length > 12 ? " …" : "") : "尚未建立可傳播的網絡"}
                       </div>
-
-                      <div>
-                        <div className="mb-2 text-sm text-slate-500">3. 指出最多 2 位弱連結</div>
-                        <div className="max-h-40 space-y-2 overflow-auto rounded-2xl border border-slate-200 p-3">
-                          {students.filter((s) => String(s.id) !== selectedStudentId && !strongSelections.includes(String(s.id))).map((student) => (
-                            <label key={student.id} className="flex items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
-                              <input type="checkbox" checked={weakSelections.includes(String(student.id))} onChange={() => toggleWeak(String(student.id))} className="h-4 w-4" />
-                              <span className="text-sm">{student.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <Button className="w-full" active={true} onClick={submitOwnNetwork} disabled={isBusy}>送出目前選擇</Button>
-
-                      {submitMessage && (
-                        <div className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                          {submitMessage}
-                        </div>
-                      )}
                     </div>
-                  </div>
-                </Card>
 
-                <Card>
-                  <div className="p-6">
-                    <div className="text-xl font-semibold text-slate-900">訊息傳播控制台</div>
-                    <div className="mt-4 space-y-4">
-                      <div>
-                        <div className="mb-2 text-sm text-slate-500">起始同學</div>
-                        <select
-                          value={String(startId)}
-                          onChange={(e) => {
-                            setStartId(Number(e.target.value));
-                            setRoundStep(999);
-                          }}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
-                        >
-                          {students.map((student) => (
-                            <option key={student.id} value={String(student.id)}>{student.label}</option>
-                          ))}
-                        </select>
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <div className="font-medium text-slate-900">傳播效率指標</div>
+                      <div className="mt-3 space-y-2 text-sm text-slate-600">
+                        <div>可達人數：{propagationStats.reachableCount} / {students.length}</div>
+                        <div>平均距離：{fmt(propagationStats.avgDistance, 2)}</div>
+                        <div>最遠距離：{propagationStats.maxDistance ?? "—"} 輪</div>
+                        <div>覆蓋 50% 所需輪次：{propagationStats.roundsTo50 ?? "無法覆蓋"}</div>
+                        <div>覆蓋 80% 所需輪次：{propagationStats.roundsTo80 ?? "無法覆蓋"}</div>
                       </div>
+                    </div>
 
-                      <div className="grid grid-cols-3 gap-2">
-                        <Button onClick={playPropagation} disabled={!edges.length}>開始</Button>
-                        <Button onClick={advancePropagation} disabled={!edges.length}>下一輪</Button>
-                        <Button onClick={resetPropagation}>全部顯示</Button>
-                      </div>
-
-                      <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                        <div className="font-medium text-slate-900">目前觀察</div>
-                        <div className="mt-1">目前輪次：第 {currentVisibleRound} 輪</div>
-                        <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
-                        <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
-                        <div className="mt-1">填答進度：{completionCount} / {students.length} 人（{completionRate}%）</div>
-                        <div className="mt-3"><ProgressBar value={completionRate} /></div>
-
-                        <div className="mt-4 break-words">
-                          本輪新增：{currentLayer.length ? currentLayer.map((id) => students.find((s) => s.id === id)?.label).filter(Boolean).join("、") : "尚無"}
-                        </div>
-
-                        <div className="mt-3 break-words">
-                          目前累積覆蓋：{shownOrderLabels.length ? shownOrderLabels.slice(0, 12).join(" → ") + (shownOrderLabels.length > 12 ? " …" : "") : "尚未建立可傳播的網絡"}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="font-medium text-slate-900">傳播效率指標</div>
-                        <div className="mt-3 space-y-2 text-sm text-slate-600">
-                          <div>可達人數：{propagationStats.reachableCount} / {students.length}</div>
-                          <div>平均距離：{fmt(propagationStats.avgDistance, 2)}</div>
-                          <div>最遠距離：{propagationStats.maxDistance ?? "—"} 輪</div>
-                          <div>覆蓋 50% 所需輪次：{propagationStats.roundsTo50 ?? "無法覆蓋"} </div>
-                          <div>覆蓋 80% 所需輪次：{propagationStats.roundsTo80 ?? "無法覆蓋"} </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="font-medium text-slate-900">前幾輪擴散摘要</div>
-                        <div className="mt-3 space-y-2 text-sm text-slate-600">
-                          {roundSummaries.length === 0 ? (
-                            <div>目前尚未形成可傳播的網絡。</div>
-                          ) : (
-                            roundSummaries.map((item) => (
-                              <div key={item.round}>
-                                第 {item.round} 輪：新增 {item.layerCount} 人，累積 {item.cumulativeCount} 人
-                              </div>
-                            ))
-                          )}
-                        </div>
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <div className="font-medium text-slate-900">前幾輪擴散摘要</div>
+                      <div className="mt-3 space-y-2 text-sm text-slate-600">
+                        {roundSummaries.length === 0 ? (
+                          <div>目前尚未形成可傳播的網絡。</div>
+                        ) : (
+                          roundSummaries.map((item) => (
+                            <div key={item.round}>
+                              第 {item.round} 輪：新增 {item.layerCount} 人，累積 {item.cumulativeCount} 人
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </div>
-                </Card>
+                </div>
+              </Card>
+            </div>
 
-                <Card>
-                  <div className="p-6">
-                    <div className="text-xl font-semibold text-slate-900">正式指標解讀</div>
-                    <div className="mt-4 space-y-4 text-sm leading-7 text-slate-600">
-                      <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="text-lg font-semibold text-slate-900">{selectedStudent.label || "尚未建立"}</div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge>度數 {degreeMetrics.degree[selectedStudent.id] || 0}</Badge>
-                          <Badge>度中心性 {fmt(degreeMetrics.normalized[selectedStudent.id])}</Badge>
-                          <Badge dark={true}>中介中心性 {fmt(betweennessMetrics.raw[selectedStudent.id])}</Badge>
-                          <Badge>標準化中介中心性 {fmt(betweennessMetrics.normalized[selectedStudent.id])}</Badge>
-                        </div>
-                        <div className="mt-3 text-slate-600">
-                          度中心性反映這位同學直接連到多少人；中介中心性反映他在他人彼此最短路徑上充當中介的程度。
-                        </div>
+            <div className="mt-6">
+              <Card>
+                <div className="p-6">
+                  <div className="text-xl font-semibold text-slate-900">正式指標解讀</div>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_1fr_1fr_0.9fr] text-sm leading-7 text-slate-600">
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <div className="text-lg font-semibold text-slate-900">{selectedStudent.label || "尚未建立"}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge>度數 {degreeMetrics.degree[selectedStudent.id] || 0}</Badge>
+                        <Badge>度中心性 {fmt(degreeMetrics.normalized[selectedStudent.id])}</Badge>
+                        <Badge dark={true}>中介中心性 {fmt(betweennessMetrics.raw[selectedStudent.id])}</Badge>
+                        <Badge>標準化中介中心性 {fmt(betweennessMetrics.normalized[selectedStudent.id])}</Badge>
                       </div>
-
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="font-medium text-slate-900">度中心性前五名</div>
-                        <div className="mt-2 space-y-2">
-                          {topDegree.length === 0 ? (
-                            <div className="text-slate-500">目前尚未形成足夠連結。</div>
-                          ) : (
-                            topDegree.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4">
-                                <span>{student.label}</span>
-                                <span className="text-slate-500">度數 {degreeMetrics.degree[student.id]}｜中心性 {fmt(degreeMetrics.normalized[student.id])}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                      <div className="mt-3 text-slate-600">
+                        度中心性反映這位同學直接連到多少人；中介中心性反映他在他人彼此最短路徑上充當中介的程度。
                       </div>
+                    </div>
 
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <div className="font-medium text-slate-900">中介中心性前五名</div>
-                        <div className="mt-2 space-y-2">
-                          {topBetweenness.length === 0 ? (
-                            <div className="text-slate-500">目前尚未形成可計算的橋樑位置。</div>
-                          ) : (
-                            topBetweenness.map((student) => (
-                              <div key={student.id} className="flex items-center justify-between gap-4">
-                                <span>{student.label}</span>
-                                <span className="text-slate-500">原始值 {fmt(betweennessMetrics.raw[student.id])}｜標準化 {fmt(betweennessMetrics.normalized[student.id])}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="font-medium text-slate-900">度中心性前五名</div>
+                      <div className="mt-2 space-y-2">
+                        {topDegree.length === 0 ? (
+                          <div className="text-slate-500">目前尚未形成足夠連結。</div>
+                        ) : (
+                          topDegree.map((student) => (
+                            <div key={student.id} className="flex items-center justify-between gap-4">
+                              <span>{student.label}</span>
+                              <span className="text-slate-500">度數 {degreeMetrics.degree[student.id]}｜中心性 {fmt(degreeMetrics.normalized[student.id])}</span>
+                            </div>
+                          ))
+                        )}
                       </div>
+                    </div>
 
-                      <div className="rounded-2xl bg-slate-900 p-4 text-white">
-                        <div className="font-medium">一句話帶走</div>
-                        <div className="mt-1 text-white/80">
-                          朋友多的人，不一定就是傳得最快的人；真正的傳播效率，還取決於他是否位在網絡中心、是否能快速接觸多層群體。
-                        </div>
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="font-medium text-slate-900">中介中心性前五名</div>
+                      <div className="mt-2 space-y-2">
+                        {topBetweenness.length === 0 ? (
+                          <div className="text-slate-500">目前尚未形成可計算的橋樑位置。</div>
+                        ) : (
+                          topBetweenness.map((student) => (
+                            <div key={student.id} className="flex items-center justify-between gap-4">
+                              <span>{student.label}</span>
+                              <span className="text-slate-500">原始值 {fmt(betweennessMetrics.raw[student.id])}｜標準化 {fmt(betweennessMetrics.normalized[student.id])}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-slate-900 p-4 text-white">
+                      <div className="font-medium">一句話帶走</div>
+                      <div className="mt-1 text-white/80">
+                        朋友多的人，不一定就是傳得最快的人；真正的傳播效率，還取決於他是否位在網絡中心、是否能快速接觸多層群體。
                       </div>
                     </div>
                   </div>
-                </Card>
-              </div>
+                </div>
+              </Card>
             </div>
           </div>
         </div>
