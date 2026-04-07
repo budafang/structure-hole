@@ -444,6 +444,85 @@
       await batch.commit();
     }
 
+    function getPropagationStats(startId, adjacency, totalStudents) {
+      if (!startId || !adjacency[startId]) {
+        return {
+          layers: [],
+          cumulative: [],
+          reachableCount: 0,
+          unreachableCount: totalStudents,
+          avgDistance: null,
+          maxDistance: null,
+          roundsTo50: null,
+          roundsTo80: null,
+          distanceMap: {}
+        };
+      }
+
+      const visited = new Set([startId]);
+      const distanceMap = { [startId]: 0 };
+      const layers = [[startId]];
+      const queue = [startId];
+
+      while (queue.length) {
+        const current = queue.shift();
+        const currentDistance = distanceMap[current];
+        const neighbors = [...adjacency[current]].sort((a, b) => a.weight - b.weight);
+
+        neighbors.forEach((next) => {
+          if (!visited.has(next.id)) {
+            visited.add(next.id);
+            distanceMap[next.id] = currentDistance + 1;
+
+            if (!layers[currentDistance + 1]) {
+              layers[currentDistance + 1] = [];
+            }
+            layers[currentDistance + 1].push(next.id);
+            queue.push(next.id);
+          }
+        });
+      }
+
+      const cumulative = [];
+      let sum = 0;
+      layers.forEach((layer) => {
+        sum += layer.length;
+        cumulative.push(sum);
+      });
+
+      const reachableCount = visited.size;
+      const unreachableCount = Math.max(totalStudents - reachableCount, 0);
+
+      const distanceValues = Object.values(distanceMap).filter((d) => d > 0);
+      const avgDistance = distanceValues.length
+        ? distanceValues.reduce((a, b) => a + b, 0) / distanceValues.length
+        : 0;
+      const maxDistance = distanceValues.length ? Math.max(...distanceValues) : 0;
+
+      const threshold50 = Math.ceil(totalStudents * 0.5);
+      const threshold80 = Math.ceil(totalStudents * 0.8);
+
+      let roundsTo50 = null;
+      let roundsTo80 = null;
+
+      cumulative.forEach((count, index) => {
+        if (roundsTo50 === null && count >= threshold50) roundsTo50 = index;
+        if (roundsTo80 === null && count >= threshold80) roundsTo80 = index;
+      });
+
+      return {
+        layers,
+        cumulative,
+        reachableCount,
+        unreachableCount,
+        avgDistance,
+        maxDistance,
+        roundsTo50,
+        roundsTo80,
+        distanceMap
+      };
+    }
+
     function Card({ children, className = "" }) {
       return <div className={`rounded-[28px] bg-white shadow-sm ring-1 ring-slate-200 ${className}`}>{children}</div>;
     }
@@ -483,6 +562,7 @@
     }
 
     function fmt(num, digits = 3) {
+      if (num === null || num === undefined || Number.isNaN(num)) return "—";
       return Number(num || 0).toFixed(digits);
     }
 
@@ -611,7 +691,7 @@
             <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-700">
               <span>— 強連結</span>
               <span className="text-emerald-600">- - 弱連結</span>
-              <span>綠色節點＝已收到訊息</span>
+              <span>綠色節點＝目前輪次已收到訊息</span>
               <span>節點越大＝度中心性越高</span>
               <span>可直接拖曳節點調整位置</span>
             </div>
@@ -630,7 +710,7 @@
       const [viewStudentId, setViewStudentId] = useState(1);
       const [startId, setStartId] = useState(1);
       const [mode, setMode] = useState("all");
-      const [step, setStep] = useState(999);
+      const [roundStep, setRoundStep] = useState(999);
       const [submitMessage, setSubmitMessage] = useState("");
       const [manualPositions, setManualPositions] = useState({});
       const [isBusy, setIsBusy] = useState(false);
@@ -697,9 +777,27 @@
       }, [autoPositions, manualPositions]);
 
       const adjacency = useMemo(() => buildAdjacency(students, edges, mode), [students, edges, mode]);
-      const traversal = useMemo(() => bfs(startId, adjacency), [startId, adjacency]);
-      const shownOrder = step >= 999 ? traversal.order : traversal.order.slice(0, step);
-      const activeIds = useMemo(() => new Set(shownOrder), [shownOrder]);
+      const propagationStats = useMemo(
+        () => getPropagationStats(startId, adjacency, students.length),
+        [startId, adjacency, students.length]
+      );
+
+      const currentVisibleRound = roundStep >= 999
+        ? Math.max(propagationStats.layers.length - 1, 0)
+        : Math.min(roundStep, Math.max(propagationStats.layers.length - 1, 0));
+
+      const activeIds = useMemo(() => {
+        const ids = new Set();
+        if (!propagationStats.layers.length) return ids;
+
+        const limit = roundStep >= 999 ? propagationStats.layers.length - 1 : roundStep;
+
+        for (let i = 0; i <= limit; i++) {
+          const layer = propagationStats.layers[i] || [];
+          layer.forEach((id) => ids.add(id));
+        }
+        return ids;
+      }, [propagationStats.layers, roundStep]);
 
       const selectedStudent = students.find((s) => s.id === viewStudentId) || students[0] || { id: 1, label: "", name: "" };
       const completionCount = Object.keys(submissions).length;
@@ -714,6 +812,23 @@
         .filter((student) => (betweennessMetrics.raw[student.id] || 0) > 0)
         .sort((a, b) => (betweennessMetrics.raw[b.id] || 0) - (betweennessMetrics.raw[a.id] || 0))
         .slice(0, 5);
+
+      const roundSummaries = useMemo(() => {
+        const summaries = [];
+        for (let i = 0; i < Math.min(propagationStats.layers.length, 4); i++) {
+          summaries.push({
+            round: i,
+            layerCount: propagationStats.layers[i]?.length || 0,
+            cumulativeCount: propagationStats.cumulative[i] || 0
+          });
+        }
+        return summaries;
+      }, [propagationStats]);
+
+      const currentLayer = propagationStats.layers[currentVisibleRound] || [];
+      const shownOrderLabels = Array.from(activeIds)
+        .map((id) => students.find((s) => s.id === id)?.label)
+        .filter(Boolean);
 
       async function rebuildClass() {
         const parsed = parseRoster(rosterText);
@@ -743,7 +858,7 @@
           setStartId(parsed[0].id);
           setStrongSelections([]);
           setWeakSelections([]);
-          setStep(999);
+          setRoundStep(999);
           setSubmitMessage("已重建名單並清空所有連結資料");
           setTimeout(() => setSubmitMessage(""), 2500);
         } catch (error) {
@@ -765,7 +880,7 @@
           setManualPositions({});
           setStrongSelections([]);
           setWeakSelections([]);
-          setStep(999);
+          setRoundStep(999);
           setSubmitMessage("已清空全部連結資料");
           setTimeout(() => setSubmitMessage(""), 2500);
         } catch (error) {
@@ -823,16 +938,18 @@
       }
 
       function resetPropagation() {
-        setStep(999);
+        setRoundStep(999);
       }
 
       function playPropagation() {
-        setStep(1);
+        setRoundStep(0);
       }
 
       function advancePropagation() {
-        setStep((prev) => {
-          if (prev >= traversal.order.length) return prev;
+        setRoundStep((prev) => {
+          const maxRound = Math.max(propagationStats.layers.length - 1, 0);
+          if (prev >= maxRound) return prev;
+          if (prev === 999) return 0;
           return prev + 1;
         });
       }
@@ -857,9 +974,9 @@
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-2xl font-semibold text-slate-900">班級網絡圖</div>
                     <div className="flex flex-wrap gap-2">
-                      <Button active={mode === "all"} onClick={() => setMode("all")}>全部連結</Button>
-                      <Button active={mode === "strongOnly"} onClick={() => setMode("strongOnly")}>只看強連結</Button>
-                      <Button active={mode === "weakPriority"} onClick={() => setMode("weakPriority")}>弱連結優先</Button>
+                      <Button active={mode === "all"} onClick={() => { setMode("all"); setRoundStep(999); }}>全部連結</Button>
+                      <Button active={mode === "strongOnly"} onClick={() => { setMode("strongOnly"); setRoundStep(999); }}>只看強連結</Button>
+                      <Button active={mode === "weakPriority"} onClick={() => { setMode("weakPriority"); setRoundStep(999); }}>弱連結優先</Button>
                       <Button onClick={resetLayout}>重設節點位置</Button>
                       <Button danger={true} onClick={clearAllNetworkData} disabled={isBusy}>清空全部連結資料</Button>
                     </div>
@@ -868,8 +985,8 @@
 
                 <div className="px-6 pb-2">
                   <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 leading-7">
-                    這個版本的連結資料會存到 Firebase，所以重新整理頁面時，舊資料會被重新讀回來。若要真正重置，請按右上的「清空全部連結資料」。
-                    節點可直接用滑鼠拖曳；若想恢復自動排列，按「重設節點位置」。
+                    這個版本的傳播模擬改成「按輪次擴散」：第 0 輪是起點本人，第 1 輪是直接連結，第 2 輪是朋友的朋友。
+                    所以換不同起點時，覆蓋速度、平均距離、覆蓋 50%/80% 所需輪次，都會跟著改變。
                   </div>
                 </div>
 
@@ -967,25 +1084,66 @@
                     <div className="mt-4 space-y-4">
                       <div>
                         <div className="mb-2 text-sm text-slate-500">起始同學</div>
-                        <select value={String(startId)} onChange={(e) => { setStartId(Number(e.target.value)); setStep(999); }} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800">
+                        <select
+                          value={String(startId)}
+                          onChange={(e) => {
+                            setStartId(Number(e.target.value));
+                            setRoundStep(999);
+                          }}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800"
+                        >
                           {students.map((student) => (
                             <option key={student.id} value={String(student.id)}>{student.label}</option>
                           ))}
                         </select>
                       </div>
+
                       <div className="grid grid-cols-3 gap-2">
                         <Button onClick={playPropagation} disabled={!edges.length}>開始</Button>
-                        <Button onClick={advancePropagation} disabled={!edges.length}>下一步</Button>
+                        <Button onClick={advancePropagation} disabled={!edges.length}>下一輪</Button>
                         <Button onClick={resetPropagation}>全部顯示</Button>
                       </div>
+
                       <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                         <div className="font-medium text-slate-900">目前觀察</div>
+                        <div className="mt-1">目前輪次：第 {currentVisibleRound} 輪</div>
                         <div className="mt-1">已收到訊息：{activeIds.size} / {students.length} 人</div>
                         <div className="mt-1">尚未收到：{students.length - activeIds.size} 人</div>
                         <div className="mt-1">填答進度：{completionCount} / {students.length} 人（{completionRate}%）</div>
                         <div className="mt-3"><ProgressBar value={completionRate} /></div>
+
+                        <div className="mt-4 break-words">
+                          本輪新增：{currentLayer.length ? currentLayer.map((id) => students.find((s) => s.id === id)?.label).filter(Boolean).join("、") : "尚無"}
+                        </div>
+
                         <div className="mt-3 break-words">
-                          傳播順序：{shownOrder.length === 0 ? "尚未建立可傳播的網絡" : `${shownOrder.slice(0, 8).map((id) => students.find((s) => s.id === id)?.label).join(" → ")}${shownOrder.length > 8 ? " …" : ""}`}
+                          目前累積覆蓋：{shownOrderLabels.length ? shownOrderLabels.slice(0, 12).join(" → ") + (shownOrderLabels.length > 12 ? " …" : "") : "尚未建立可傳播的網絡"}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <div className="font-medium text-slate-900">傳播效率指標</div>
+                        <div className="mt-3 space-y-2 text-sm text-slate-600">
+                          <div>可達人數：{propagationStats.reachableCount} / {students.length}</div>
+                          <div>平均距離：{fmt(propagationStats.avgDistance, 2)}</div>
+                          <div>最遠距離：{propagationStats.maxDistance ?? "—"} 輪</div>
+                          <div>覆蓋 50% 所需輪次：{propagationStats.roundsTo50 ?? "無法覆蓋"} </div>
+                          <div>覆蓋 80% 所需輪次：{propagationStats.roundsTo80 ?? "無法覆蓋"} </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <div className="font-medium text-slate-900">前幾輪擴散摘要</div>
+                        <div className="mt-3 space-y-2 text-sm text-slate-600">
+                          {roundSummaries.length === 0 ? (
+                            <div>目前尚未形成可傳播的網絡。</div>
+                          ) : (
+                            roundSummaries.map((item) => (
+                              <div key={item.round}>
+                                第 {item.round} 輪：新增 {item.layerCount} 人，累積 {item.cumulativeCount} 人
+                              </div>
+                            ))
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1044,7 +1202,7 @@
                       <div className="rounded-2xl bg-slate-900 p-4 text-white">
                         <div className="font-medium">一句話帶走</div>
                         <div className="mt-1 text-white/80">
-                          度中心性高的人，不一定是中介中心性高的人。朋友很多的人，未必就是最能連接不同群體的人。
+                          朋友多的人，不一定就是傳得最快的人；真正的傳播效率，還取決於他是否位在網絡中心、是否能快速接觸多層群體。
                         </div>
                       </div>
                     </div>
